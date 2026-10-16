@@ -12,6 +12,7 @@ Esta alternativa crea una instancia nueva de Termia con S3 privado y CloudFront 
 - Política S3: lectura exclusiva desde la distribución creada y denegación de transporte inseguro.
 - Respuestas: CSP estricta, `DENY`, `nosniff`, HSTS, Referrer Policy y Permissions Policy; sin `X-XSS-Protection`.
 - Operación: creación única en dos fases de escritura, stack policy inmutable y protección de terminación para `prod` antes de publicar objetos.
+- Retención: `DeletionPolicy: Retain` conserva el bucket incluso ante rollback de la creación, eliminación del stack o reemplazo; `UpdateReplacePolicy: Retain` también lo conserva durante reemplazos. El almacenamiento y las versiones retenidas pueden generar costos y no existe limpieza automática.
 
 ## Requisitos
 

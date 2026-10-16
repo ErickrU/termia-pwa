@@ -38,7 +38,7 @@ Parameters:
 Resources:
   ContentBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: RetainExceptOnCreate
+    DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
       BucketEncryption:

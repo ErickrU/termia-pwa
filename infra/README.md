@@ -12,4 +12,4 @@ S3 mantiene activos los cuatro controles de Block Public Access, usa `BucketOwne
 
 No hay nombres físicos, cuentas, ARN, buckets, distribuciones ni dominios reales en el repositorio. Tampoco se crean IAM, DNS, certificados propios, WAF, logs o funciones de borde.
 
-La plantilla usa `DeletionPolicy: RetainExceptOnCreate` y `UpdateReplacePolicy: Retain`. La stack policy niega toda actualización. El script admite únicamente las fases separadas `review`, `prepare` y `execute`; consulta [`../docs/AWS-DEPLOYMENT.md`](../docs/AWS-DEPLOYMENT.md) antes de usarlo.
+La plantilla usa `DeletionPolicy: Retain`, que conserva el bucket incluso durante un rollback de la creación, al eliminar el stack o al reemplazar el recurso, y mantiene `UpdateReplacePolicy: Retain`. El almacenamiento y las versiones retenidas pueden generar costos y no existe limpieza automática. La stack policy niega toda actualización. El script admite únicamente las fases separadas `review`, `prepare` y `execute`; consulta [`../docs/AWS-DEPLOYMENT.md`](../docs/AWS-DEPLOYMENT.md) antes de usarlo.
