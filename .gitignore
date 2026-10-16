@@ -6,10 +6,10 @@ npm-debug.log*
 _site/
 
 # Configuración local y secretos
-.env
-.env.*
+.env*
 *.credentials
-credentials.json
+credentials
+credentials.*
 .aws/
 *.pem
 *.key
