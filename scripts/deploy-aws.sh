@@ -10,7 +10,7 @@ VALIDATOR="$ROOT/scripts/validate-aws-proof.mjs"
 ATTEMPTS_ROOT="$ROOT/.aws-attempts"
 CHANGE_STATE="$ROOT/.aws-change-set.json"
 DEPLOYMENT_STATE="$ROOT/.aws-deployment.json"
-TARGET_STACK='termia-pwa-public-prod'
+TARGET_STACK=''
 ENVIRONMENT='prod'
 PRICE_CLASS='PriceClass_100'
 MARKER='termia-pwa-cloudfront-oac-v1'
@@ -31,30 +31,34 @@ usage() {
   cat <<'USAGE'
 Revisar hashes sin cambiar infraestructura:
   ./scripts/deploy-aws.sh --phase review \
+    --stack-name <AUTHORIZED_STACK_NAME> \
     --profile <YOUR_AWS_PROFILE> --region <YOUR_AWS_REGION>
 
-Preparar el único target CREATE propuesto sin ejecutarlo:
+Preparar el target CREATE autorizado sin ejecutarlo:
   ./scripts/deploy-aws.sh --phase prepare \
+    --stack-name <AUTHORIZED_STACK_NAME> \
     --profile <YOUR_AWS_PROFILE> --region <YOUR_AWS_REGION> \
     --confirm-commit-sha <APPROVED_COMMIT_SHA> \
     --confirm-identity-sha <APPROVED_IDENTITY_SHA256>
 
 Ejecutar únicamente el change set ya preparado y revalidado:
   ./scripts/deploy-aws.sh --phase execute \
+    --stack-name <AUTHORIZED_STACK_NAME> \
     --profile <YOUR_AWS_PROFILE> --region <YOUR_AWS_REGION> \
     --confirm-commit-sha <APPROVED_COMMIT_SHA> \
     --confirm-identity-sha <APPROVED_IDENTITY_SHA256>
 
 Opciones:
   --phase FASE                 review | prepare | execute
+  --stack-name NOMBRE          Target autorizado explícitamente
   --profile PERFIL             Perfil temporal explícito
   --region REGION              Región explícita
   --confirm-commit-sha SHA     Commit aprobado y limpio
   --confirm-identity-sha SHA   Hash canónico aprobado de identidad/profile/región
   -h, --help                   Muestra esta ayuda
 
-El stack, entorno, price class, nombre del change set y client token son internos.
-Si termia-pwa-public-prod ya existe, el resultado siempre es STOP: nunca update,
+El stack se exige en runtime; entorno, price class, nombre del change set y client token son internos.
+Si el stack indicado ya existe, el resultado siempre es STOP: nunca update,
 cambio automático de nombre, eliminación ni limpieza.
 USAGE
 }
@@ -79,6 +83,7 @@ utc_now() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --phase) [[ $# -ge 2 ]] || fail 'Falta el valor de --phase.'; PHASE="$2"; shift 2 ;;
+    --stack-name) [[ $# -ge 2 ]] || fail 'Falta el valor de --stack-name.'; TARGET_STACK="$2"; shift 2 ;;
     --profile) [[ $# -ge 2 ]] || fail 'Falta el valor de --profile.'; PROFILE="$2"; shift 2 ;;
     --region) [[ $# -ge 2 ]] || fail 'Falta el valor de --region.'; REGION="$2"; shift 2 ;;
     --confirm-commit-sha) [[ $# -ge 2 ]] || fail 'Falta el valor de --confirm-commit-sha.'; CONFIRM_COMMIT_SHA="$2"; shift 2 ;;
@@ -88,9 +93,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+[[ "$TARGET_STACK" =~ ^[A-Za-z][A-Za-z0-9-]{0,127}$ ]] || fail 'Debes indicar un --stack-name explícito válido.'
 [[ "$PHASE" =~ ^(review|prepare|execute)$ ]] || fail '--phase debe ser review, prepare o execute.'
 [[ "$PROFILE" =~ ^[A-Za-z0-9_+=,.@-]{1,128}$ ]] || fail 'Debes indicar un --profile explícito válido.'
 [[ "$REGION" =~ ^[a-z]{2}(-gov)?-[a-z]+-[0-9]+$ ]] || fail 'La región no tiene un formato válido.'
+
+export AWS_STACK_NAME="$TARGET_STACK"
 
 for tool in aws node curl git jq shasum cmp; do
   command -v "$tool" >/dev/null 2>&1 || fail "No se encontró $tool en PATH."

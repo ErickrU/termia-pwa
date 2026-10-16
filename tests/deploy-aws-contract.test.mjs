@@ -64,11 +64,13 @@ function utc(base, seconds) {
   return new Date(base + (seconds * 1000)).toISOString().replace('.000Z', 'Z');
 }
 
-test('el target y sus parámetros de producción están fijados internamente', () => {
-  assert.match(script, /^TARGET_STACK='termia-pwa-public-prod'$/m);
+test('el target es una entrada obligatoria y los parámetros de producción permanecen fijos', () => {
+  assert.equal(CONTRACT.stackName, 'fixture-stack-not-for-deployment');
+  assert.match(script, /^TARGET_STACK=''$/m);
+  assert.match(script, /--stack-name\) \[\[ \$# -ge 2 \]\] \|\| fail/);
+  assert.match(script, /AWS_STACK_NAME="\$TARGET_STACK"/);
   assert.match(script, /^ENVIRONMENT='prod'$/m);
   assert.match(script, /^PRICE_CLASS='PriceClass_100'$/m);
-  assert.doesNotMatch(script, /--stack\)/);
   assert.doesNotMatch(script, /--environment\)/);
   assert.doesNotMatch(script, /--price-class\)/);
   assert.match(script, /el resultado siempre es STOP/);
@@ -444,7 +446,7 @@ test('los reportes compartibles admiten únicamente hashes y booleanos', () => {
   });
   assert.equal(validateShareableReport(report), true);
   assert.throws(
-    () => validateShareableReport({ ...report, leaked: 'termia-pwa-public-prod' }),
+    () => validateShareableReport({ ...report, leaked: CONTRACT.stackName }),
     (error) => error?.code === 'REPORT_REDACTION'
   );
 });

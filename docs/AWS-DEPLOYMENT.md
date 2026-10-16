@@ -1,14 +1,14 @@
 # Despliegue AWS seguro
 
-Esta alternativa propone crear una instancia nueva de Termia con S3 privado y CloudFront OAC. El único nombre permitido por el script es `termia-pwa-public-prod`; no demuestra que ese nombre esté disponible ni que exista un despliegue activo.
+Esta alternativa propone crear una instancia nueva de Termia con S3 privado y CloudFront OAC. El script no incluye un nombre real: exige `--stack-name <AUTHORIZED_STACK_NAME>` en runtime; esto no demuestra que el nombre autorizado esté disponible ni que exista un despliegue activo.
 
 > Este workflow preparó y verificó código exclusivamente de forma local: no hizo llamadas AWS. Toda ejecución futura requiere credenciales temporales de mínimo privilegio, revisión independiente y autorización trazable.
 
 ## Regla de parada
 
-`termia-pwa-public-prod` solo puede usarse si la fase `prepare` futura todavía demuestra su ausencia inmediatamente antes de crear el change set. Si `DescribeStacks` o `ListChangeSets` encuentra el nombre, devuelve un resultado ambiguo o no puede correlacionarse, el resultado es **STOP**. El script nunca actualiza un stack existente, elige otro nombre, elimina un intento ni realiza cleanup automático.
+El nombre proporcionado solo puede usarse si la fase `prepare` futura todavía demuestra su ausencia inmediatamente antes de crear el change set. Si `DescribeStacks` o `ListChangeSets` encuentra el nombre, devuelve un resultado ambiguo o no puede correlacionarse, el resultado es **STOP**. El script nunca actualiza un stack existente, elige otro nombre, elimina un intento ni realiza cleanup automático.
 
-El stack, entorno `prod`, `PriceClass_100`, tipo `CREATE`, nombre del change set y client token son internos. No existen opciones para inyectarlos.
+El stack es una entrada runtime obligatoria sin valor predeterminado; entorno `prod`, `PriceClass_100`, tipo `CREATE`, nombre del change set y client token permanecen internos.
 
 ## Controles conservados
 
@@ -38,6 +38,7 @@ Una persona autorizada puede obtener los hashes sin crear, actualizar o eliminar
 ```bash
 ./scripts/deploy-aws.sh \
   --phase review \
+  --stack-name <AUTHORIZED_STACK_NAME> \
   --profile <YOUR_AWS_PROFILE> \
   --region <YOUR_AWS_REGION>
 ```
@@ -49,6 +50,7 @@ Esta fase sí consulta la identidad activa en AWS cuando alguien la ejecuta en e
 ```bash
 ./scripts/deploy-aws.sh \
   --phase prepare \
+  --stack-name <AUTHORIZED_STACK_NAME> \
   --profile <YOUR_AWS_PROFILE> \
   --region <YOUR_AWS_REGION> \
   --confirm-commit-sha <APPROVED_COMMIT_SHA> \
@@ -76,6 +78,7 @@ Antes de cualquier API, el script inspecciona localmente el skeleton de AWS CLI 
 ```bash
 ./scripts/deploy-aws.sh \
   --phase execute \
+  --stack-name <AUTHORIZED_STACK_NAME> \
   --profile <YOUR_AWS_PROFILE> \
   --region <YOUR_AWS_REGION> \
   --confirm-commit-sha <APPROVED_COMMIT_SHA> \

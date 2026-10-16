@@ -40,7 +40,7 @@ CloudFormation define exactamente bucket, OAC, política de cabeceras, distribuc
 
 ## Flujo trazable de creación
 
-El único target propuesto es `termia-pwa-public-prod`, con `prod` y `PriceClass_100` fijados internamente. Cualquier existencia o incertidumbre produce STOP; no hay update, delete, fallback de nombre ni cleanup.
+El target autorizado se exige en runtime mediante `--stack-name <AUTHORIZED_STACK_NAME>` y no tiene valor predeterminado; `prod` y `PriceClass_100` permanecen fijados internamente. Cualquier existencia o incertidumbre produce STOP; no hay update, delete, fallback de nombre ni cleanup.
 
 `prepare` genera internamente un attempt ID, nombre de change set y client token, persiste la identidad normalizada antes de crear y conserva evidencia privada `0700/0600`. Dos probes de ausencia preceden al inicio capturado de `CreateChangeSet` por un máximo de 60 segundos; CloudTrail debe igualar el request ID exacto de `DescribeStacks`. Para la creación debe correlacionar operación exitosa, identidad, región, tiempo, stack, nombre, token e ID del change set; sus campos no garantizados pueden faltar, pero cualquier valor presente debe concordar. El template remoto debe coincidir byte por byte con la plantilla ASCII+LF y con el blob del commit.
 

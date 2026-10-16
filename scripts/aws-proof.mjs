@@ -1,10 +1,15 @@
 import { createHash } from 'node:crypto';
 
+const stackName = process.env.AWS_STACK_NAME;
+if (!/^[A-Za-z][A-Za-z0-9-]{0,127}$/.test(stackName ?? '')) {
+  throw new Error('AWS_STACK_NAME debe contener un nombre de stack explícito y válido.');
+}
+
 export const CONTRACT = Object.freeze({
   schemaVersion: 1,
   project: 'termia-pwa',
   repository: 'ErickrU-termia-pwa',
-  stackName: 'termia-pwa-public-prod',
+  stackName,
   environment: 'prod',
   priceClass: 'PriceClass_100',
   maxFreshnessMs: 300_000,

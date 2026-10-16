@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node herramientas/servidor.mjs",
     "check": "node --check js/conversion.js && node --check js/app.js && node --check js/pwa.js && node --check sw.js && node --check herramientas/servidor.mjs && node --check scripts/aws-proof.mjs && node --check scripts/validate-aws-proof.mjs && node -e \"JSON.parse(require('node:fs').readFileSync('manifest.webmanifest', 'utf8'))\"",
-    "test": "node --test",
+    "test": "AWS_STACK_NAME=fixture-stack-not-for-deployment node --test",
     "iconos": "bash herramientas/generar-iconos.sh"
   },
   "keywords": ["pwa", "temperatura", "conversor", "service-worker", "window-controls-overlay"],

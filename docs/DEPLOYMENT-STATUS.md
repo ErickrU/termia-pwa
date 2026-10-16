@@ -4,7 +4,7 @@
 
 Este repositorio no registra ni afirma un despliegue AWS activo. Este workflow no hizo llamadas AWS. No contiene cuentas, ARN, buckets físicos, IDs de distribución, tokens, outputs ni URLs reales.
 
-El único target propuesto es `termia-pwa-public-prod`. Su nombre no está reservado: una fase `prepare` futura debe probar su ausencia mediante `DescribeStacks` **y** `ListChangeSets`, además de correlacionar CloudTrail. Si el nombre existe o la prueba es incompleta, el resultado obligatorio es STOP; nunca update ni cambio automático de nombre.
+El target se proporciona exclusivamente en runtime como `--stack-name <AUTHORIZED_STACK_NAME>` y no se conserva un nombre real en el repositorio. Una fase `prepare` futura debe probar su ausencia mediante `DescribeStacks` **y** `ListChangeSets`, además de correlacionar CloudTrail. Si el nombre existe o la prueba es incompleta, el resultado obligatorio es STOP; nunca update ni cambio automático de nombre.
 
 ## Evidencia local esperada
 
