@@ -1,0 +1,5 @@
+{
+  "name": "identity-mismatch",
+  "mutation": "identity-mismatch",
+  "expectedCode": "IDENTITY_HASH"
+}

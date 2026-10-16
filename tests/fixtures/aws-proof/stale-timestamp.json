@@ -1,0 +1,5 @@
+{
+  "name": "stale-timestamp",
+  "mutation": "stale-timestamp",
+  "expectedCode": "TIMESTAMP_STALE"
+}

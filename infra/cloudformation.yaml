@@ -1,19 +1,19 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
-  Termia: PWA estática con bucket S3 privado, CloudFront, Origin Access
+  Termia: PWA estatica con bucket S3 privado, CloudFront, Origin Access
   Control y cabeceras de seguridad.
 
 Parameters:
   ProjectSlug:
     Type: String
     Default: termia-pwa
-    Description: Identificador corto para etiquetas y nombres lógicos.
+    Description: Identificador corto para etiquetas y nombres logicos.
     AllowedPattern: '^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$'
-    ConstraintDescription: Usa 3-32 caracteres en minúscula, números o guiones.
+    ConstraintDescription: Usa 3-32 caracteres en minuscula, numeros o guiones.
 
   Environment:
     Type: String
-    Description: Entorno lógico de la aplicación.
+    Description: Entorno logico de la aplicacion.
     AllowedValues:
       - dev
       - test
@@ -22,7 +22,7 @@ Parameters:
 
   DeploymentId:
     Type: String
-    Description: Identificador estable derivado localmente de cuenta, región y stack.
+    Description: Identificador estable derivado localmente de cuenta, region y stack.
     AllowedPattern: '^[a-f0-9]{10}$'
     ConstraintDescription: Debe contener exactamente 10 caracteres hexadecimales.
 
@@ -123,7 +123,7 @@ Resources:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
-        Comment: !Sub '${ProjectSlug}-${Environment}: PWA estática'
+        Comment: !Sub '${ProjectSlug}-${Environment}: PWA estatica'
         Enabled: true
         DefaultRootObject: index.html
         HttpVersion: http2and3
@@ -202,23 +202,23 @@ Outputs:
     Value: termia-pwa-cloudfront-oac-v1
 
   DeploymentId:
-    Description: Identificador estable de esta creación.
+    Description: Identificador estable de esta creacion.
     Value: !Ref DeploymentId
 
   Environment:
-    Description: Entorno lógico desplegado.
+    Description: Entorno logico desplegado.
     Value: !Ref Environment
 
   SiteUrl:
-    Description: URL HTTPS pública de la PWA.
+    Description: URL HTTPS publica de la PWA.
     Value: !Sub 'https://${Distribution.DomainName}'
 
   DistributionId:
-    Description: Identificador de la distribución creada.
+    Description: Identificador de la distribucion creada.
     Value: !Ref Distribution
 
   DistributionArn:
-    Description: ARN de la distribución creada.
+    Description: ARN de la distribucion creada.
     Value: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
 
   DistributionDomainName:
@@ -230,7 +230,7 @@ Outputs:
     Value: !GetAtt OriginAccessControl.Id
 
   SecurityHeadersPolicyId:
-    Description: Identificador de la política de cabeceras creada.
+    Description: Identificador de la politica de cabeceras creada.
     Value: !Ref SecurityHeadersPolicy
 
   ContentBucketName:

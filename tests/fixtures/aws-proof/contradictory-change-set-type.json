@@ -1,0 +1,5 @@
+{
+  "name": "contradictory-change-set-type",
+  "mutation": "contradictory-change-set-type",
+  "expectedCode": "CHANGE_SET_TYPE_CONTRADICTION"
+}

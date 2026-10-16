@@ -1,0 +1,5 @@
+{
+  "name": "wrong-stack-state",
+  "mutation": "wrong-stack-state",
+  "expectedCode": "STACK_STATUS"
+}

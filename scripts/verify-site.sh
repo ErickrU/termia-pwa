@@ -73,5 +73,19 @@ node --check "$TMP_DIR/sw.js" >/dev/null
   exit 1
 }
 
-printf '  ✓ HTTPS, cabeceras, PWA e iconos\n'
+CONTROL_COUNT="$(grep -o 'data-control-ventana' "$TMP_DIR/index.html" | wc -l | tr -d ' ')"
+SHARE_COUNT="$(grep -o 'id="control-compartir"' "$TMP_DIR/index.html" | wc -l | tr -d ' ')"
+[[ "$CONTROL_COUNT" == '5' ]] || { printf 'ERROR: deben existir exactamente cinco controles WCO.\n' >&2; exit 1; }
+[[ "$SHARE_COUNT" == '1' ]] || { printf 'ERROR: debe existir un único control Compartir.\n' >&2; exit 1; }
+grep -Fq 'const enlace = window.location.href' "$TMP_DIR/js-pwa.js" || { printf 'ERROR: Compartir no usa la URL actual.\n' >&2; exit 1; }
+grep -Fq "typeof navigator.share === 'function'" "$TMP_DIR/js-pwa.js" || { printf 'ERROR: falta Web Share.\n' >&2; exit 1; }
+grep -Fq 'navigator.clipboard?.writeText' "$TMP_DIR/js-pwa.js" || { printf 'ERROR: falta Clipboard API.\n' >&2; exit 1; }
+grep -Fq "document.execCommand('copy')" "$TMP_DIR/js-pwa.js" || { printf 'ERROR: falta el fallback de copia.\n' >&2; exit 1; }
+grep -Eq 'id="estado-pwa"[^>]+role="status"[^>]+aria-live="polite"' "$TMP_DIR/index.html" || { printf 'ERROR: falta feedback accesible.\n' >&2; exit 1; }
+node -e '
+  const manifest = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
+  if (JSON.stringify(manifest.display_override) !== JSON.stringify(["window-controls-overlay", "standalone"])) process.exit(1);
+' "$TMP_DIR/manifest.webmanifest" || { printf 'ERROR: el manifest no conserva WCO.\n' >&2; exit 1; }
+
+printf '  ✓ HTTPS, cabeceras, PWA, cinco controles, Compartir e iconos\n'
 printf 'Sitio publicado correctamente.\n'

@@ -1,0 +1,5 @@
+{
+  "name": "valid-no-change-set-type",
+  "mutation": null,
+  "expectedCode": "PASS"
+}

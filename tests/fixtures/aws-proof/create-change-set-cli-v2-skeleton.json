@@ -1,0 +1,16 @@
+{
+  "StackName": "",
+  "TemplateBody": "",
+  "Parameters": [],
+  "Capabilities": [],
+  "RoleARN": "",
+  "NotificationARNs": [],
+  "Tags": [],
+  "ChangeSetName": "",
+  "ClientToken": "",
+  "Description": "",
+  "ChangeSetType": "CREATE",
+  "IncludeNestedStacks": false,
+  "OnStackFailure": "DO_NOTHING",
+  "ImportExistingResources": false
+}

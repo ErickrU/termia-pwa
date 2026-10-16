@@ -1,0 +1,5 @@
+{
+  "name": "extra-action",
+  "mutation": "extra-action",
+  "expectedCode": "CHANGES_COUNT"
+}

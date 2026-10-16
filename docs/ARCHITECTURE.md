@@ -14,13 +14,13 @@ flowchart LR
   CACHE --> UI
 ```
 
-`conversion.js` contiene las fórmulas y validación sin DOM. `app.js` presenta resultados. `pwa.js` controla instalación, tema, ayuda, actualización, Window Controls Overlay y Compartir. La cabecera contiene exactamente cinco controles interactivos; el único control Compartir usa Web Share o copia la URL actual y anuncia el resultado en una región viva.
+`conversion.js` contiene fórmulas y validación sin DOM. `app.js` presenta resultados. `pwa.js` controla instalación, tema, ayuda, actualización, Window Controls Overlay y Compartir. La cabecera conserva exactamente cinco controles; el único Compartir usa Web Share o copia la URL actual mediante Clipboard API y fallback, y anuncia el resultado en una región viva.
 
-El manifest solicita `window-controls-overlay` con fallback `standalone`. La cabecera usa las variables `titlebar-area-*`; sus controles son `app-region: no-drag`. Sin WCO, conserva una cabecera web normal. El service worker `termia-v2` instala primero el shell completo y solo elimina caches anteriores al activar la nueva versión; la activación anticipada requiere confirmación de la persona usuaria.
+El manifest prioriza `window-controls-overlay` con fallback `standalone`. La cabecera usa las variables `titlebar-area-*` y sus controles son `app-region: no-drag`. Sin WCO conserva una cabecera web normal. El service worker mantiene su flujo explícito de actualización.
 
 ## Publicación web
 
-GitHub Pages recibe un `_site` construido con una allowlist de 14 archivos. No se publican infraestructura, scripts, documentación, fuentes de iconos, reportes ni estado local.
+GitHub Pages recibe un `_site` construido con una allowlist de 14 archivos. No se publican infraestructura, scripts, documentación, pruebas, reportes ni estado local.
 
 ## Alternativa AWS
 
@@ -29,12 +29,23 @@ flowchart LR
   B[Navegador público] -->|HTTPS| CF[CloudFront]
   CF -->|OAC y SigV4| S3[(S3 privado)]
   CF --> H[Cabeceras de seguridad]
-  C[CloudFormation] --> CF
+  C[CloudFormation CREATE] --> CF
   C --> S3
+  E[Evidencia privada] --> V[Validador local fail-closed]
 ```
 
-CloudFront es público porque la PWA está destinada a acceso anónimo. S3 permanece privado y solo concede `s3:GetObject` al servicio CloudFront cuando `AWS:SourceArn` coincide con la distribución creada. Un `Deny` separado rechaza transporte inseguro.
+CloudFront es público porque la PWA está destinada a acceso anónimo. S3 permanece privado con cuatro Block Public Access y solo concede `s3:GetObject` al servicio CloudFront cuando `AWS:SourceArn` coincide con la distribución creada. Un `Deny` separado rechaza transporte inseguro.
 
-CloudFormation crea exactamente bucket, OAC, política de cabeceras, distribución y bucket policy. No configura website endpoint, acceso público S3, CORS, IAM, DNS, dominio propio, WAF, logs ni código de borde. El bucket usa SSE-S3, versionado, retención y Object Ownership sin ACL.
+CloudFormation define exactamente bucket, OAC, política de cabeceras, distribución y bucket policy. No configura website endpoint, acceso público S3, CORS, IAM, DNS, dominio propio, WAF, logs, macros, nested stacks, imports ni código de borde. El bucket usa SSE-S3, versionado, `BucketOwnerEnforced`, `DeletionPolicy: Retain` y `UpdateReplacePolicy: Retain`.
+
+## Flujo trazable de creación
+
+El único target propuesto es `termia-pwa-public-prod`, con `prod` y `PriceClass_100` fijados internamente. Cualquier existencia o incertidumbre produce STOP; no hay update, delete, fallback de nombre ni cleanup.
+
+`prepare` genera internamente un attempt ID, nombre de change set y client token, y conserva evidencia privada `0700/0600`. Dos probes de ausencia preceden inmediatamente al request `CREATE`; CloudTrail correlaciona identidad, región, stack, nombre, token y respuesta. El template remoto debe coincidir byte por byte con la plantilla ASCII+LF y con el blob del commit.
+
+El validador deriva la semántica `CREATE` de todas las fuentes en conjunción. No depende de que `DescribeChangeSet` devuelva `ChangeSetType`, campo que puede estar ausente; sí rechaza contradicciones. Exige placeholder `REVIEW_IN_PROGRESS` vacío, un solo change set disponible, `OnStackFailure=DO_NOTHING`, modo `STANDARD`, parámetros/tags exactos y cinco `Add` allowlisted.
+
+Antes de execute se repite la conjunción con un snapshot TOCTOU de máximo 300 segundos. Los valores completos quedan privados; los reportes compartibles solo contienen hashes y booleanos. Este workflow no hizo llamadas AWS.
 
 La CSP permite únicamente recursos del mismo origen; Web Share y escritura al portapapeles se limitan a `self`. HSTS no incluye subdominios porque el certificado predeterminado usa un dominio compartido que el proyecto no controla.

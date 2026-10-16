@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node herramientas/servidor.mjs",
-    "check": "node --check js/conversion.js && node --check js/app.js && node --check js/pwa.js && node --check sw.js && node --check herramientas/servidor.mjs && node -e \"JSON.parse(require('node:fs').readFileSync('manifest.webmanifest', 'utf8'))\"",
+    "check": "node --check js/conversion.js && node --check js/app.js && node --check js/pwa.js && node --check sw.js && node --check herramientas/servidor.mjs && node --check scripts/aws-proof.mjs && node --check scripts/validate-aws-proof.mjs && node -e \"JSON.parse(require('node:fs').readFileSync('manifest.webmanifest', 'utf8'))\"",
     "test": "node --test",
     "iconos": "bash herramientas/generar-iconos.sh"
   },

@@ -1,0 +1,5 @@
+{
+  "name": "on-stack-failure-delete",
+  "mutation": "on-stack-failure-delete",
+  "expectedCode": "ON_STACK_FAILURE"
+}

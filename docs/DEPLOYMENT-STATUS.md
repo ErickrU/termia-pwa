@@ -1,26 +1,33 @@
 # Estado del despliegue AWS
 
-## Sin estado real versionado
+## Sin despliegue afirmado
 
-Este repositorio no registra ni afirma que exista un despliegue AWS activo. No contiene URL de CloudFront, cuentas, ARN, nombres físicos de buckets, IDs de distribución, outputs, fechas de despliegue o hashes aplicados.
+Este repositorio no registra ni afirma un despliegue AWS activo. Este workflow no hizo llamadas AWS. No contiene cuentas, ARN, buckets físicos, IDs de distribución, tokens, outputs ni URLs reales.
 
-Cada despliegue propio conserva sus datos únicamente en `.aws-change-set.json` y `.aws-deployment.json`, archivos locales ignorados con modo `0600`. No los adjuntes a issues, commits o artefactos de Pages.
+El único target propuesto es `termia-pwa-public-prod`. Su nombre no está reservado: una fase `prepare` futura debe probar su ausencia mediante `DescribeStacks` **y** `ListChangeSets`, además de correlacionar CloudTrail. Si el nombre existe o la prueba es incompleta, el resultado obligatorio es STOP; nunca update ni cambio automático de nombre.
 
-## Evidencia esperada tras una creación propia
+## Evidencia local esperada
 
-Conserva en un sistema privado apropiado:
+Cada intento futuro conserva datos completos únicamente en `.aws-attempts/<attempt-id>/` (`0700`, archivos `0600`) y en el puntero `.aws-change-set.json` (`0600`). El intento incluye timestamps UTC, profile, región, identidad, stack, nombre de change set, client token, request/respuesta, template y commit SHA, respuestas remotas y una cadena de hashes write-once. Los reportes compartibles contienen solo hashes y booleanos.
 
-- estado `CREATE_COMPLETE` y cinco recursos esperados;
-- stack policy que niega toda actualización;
-- termination protection activa para `prod`;
-- S3 Block Public Access completo, Object Ownership, SSE-S3 y versionado;
-- bucket vacío antes de la primera publicación;
-- OAC con SigV4 permanente y política limitada al ARN de la distribución;
-- acceso S3 anónimo directo rechazado;
-- redirección HTTPS y solo métodos `GET`/`HEAD`;
-- CSP, HSTS, `DENY`, `nosniff`, Referrer Policy y Permissions Policy;
-- allowlist exacta, manifest, service worker, offline y Compartir.
+Un intento fallido queda intacto y bloquea reintentos automáticos. `DO_NOTHING`, `DeletionPolicy: Retain`, `UpdateReplacePolicy: Retain`, versionado y recursos parciales pueden conservar costos. No existe cleanup automático; la recuperación exige una autorización posterior separada.
 
-## Estado público del repositorio
+## Conjunción obligatoria antes de execute
 
-GitHub Pages publica exclusivamente el artefacto `_site` de 14 archivos. La infraestructura, scripts, documentación, fuentes auxiliares y estados locales quedan fuera del contenido web.
+- commit limpio y template local idéntico al blob aprobado;
+- template ASCII con LF e igualdad byte por byte con `GetTemplate`;
+- identidad, profile y región iguales a sus hashes aprobados;
+- dos fuentes de ausencia inmediatamente anteriores y evento CloudTrail correlacionado;
+- request `CREATE` con nombre/token internos y `OnStackFailure=DO_NOTHING`;
+- respuesta y evento `CreateChangeSet` correlacionados;
+- placeholder `REVIEW_IN_PROGRESS` sin recursos, outputs ni template aplicado;
+- un único change set `CREATE_COMPLETE/AVAILABLE`;
+- parámetros, tags, modo `STANDARD` y capabilities exactos;
+- exactamente cinco acciones `Add` allowlisted;
+- snapshot TOCTOU completo de antigüedad máxima de 300 segundos.
+
+`ChangeSetType` no forma parte obligatoria de la respuesta `DescribeChangeSet`; su ausencia o valor nulo no invalida la prueba. Un valor contradictorio sí la invalida.
+
+## Estado público
+
+GitHub Pages publica solo el artefacto `_site` de 14 archivos. Infraestructura, scripts, pruebas, documentación y evidencia privada no forman parte del sitio.

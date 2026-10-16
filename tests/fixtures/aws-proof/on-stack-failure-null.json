@@ -1,0 +1,5 @@
+{
+  "name": "on-stack-failure-null",
+  "mutation": "on-stack-failure-null",
+  "expectedCode": "ON_STACK_FAILURE"
+}

@@ -1,0 +1,5 @@
+{
+  "name": "missing-client-token",
+  "mutation": "missing-client-token",
+  "expectedCode": "CLIENT_TOKEN"
+}

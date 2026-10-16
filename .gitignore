@@ -20,6 +20,7 @@ credentials.*
 *.keystore
 
 # Estado y salidas locales de AWS
+.aws-attempts/
 .aws-change-set.json
 .aws-deployment.json
 deployment-outputs*.json
