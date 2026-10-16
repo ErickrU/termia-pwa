@@ -98,7 +98,7 @@ No hay ruta de update, delete o cleanup. Cualquier recuperación de un intento p
 ./scripts/verify-site.sh <YOUR_CLOUDFRONT_HTTPS_URL>
 ```
 
-Comprueba HTTPS, cabeceras, manifest, service worker, CSS, JavaScript, iconos, exactamente cinco controles y el único Compartir con Web Share, Clipboard API, fallback y feedback accesible.
+Comprueba HTTPS, cabeceras, manifest, service worker, CSS, JavaScript, iconos, exactamente cinco controles y el único Compartir. También exige que la hoja accesible incluya destinos generados desde la URL actual, enlaces externos seguros, Web Share opcional, copia únicamente explícita y selección manual cuando fallen los mecanismos automáticos; la allowlist pública continúa limitada a los mismos 14 archivos.
 
 ## Fuentes
 

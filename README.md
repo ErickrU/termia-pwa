@@ -9,7 +9,9 @@ Termia es una PWA estática, accesible y sin dependencias de ejecución que conv
 - Diseño adaptable, temas claro/oscuro, foco visible y navegación por teclado.
 - Manifest, service worker, iconos instalables y página offline.
 - Window Controls Overlay con exactamente cinco controles: Instalar, Compartir, Tema, Restablecer y Ayuda.
-- Un único control Compartir que usa Web Share y, cuando no está disponible, copia la URL actual al portapapeles con feedback accesible.
+- Un único control Compartir abre una hoja propia: centrada en escritorio y anclada abajo en móvil. Ofrece WhatsApp, Telegram, Facebook, X y Correo con la URL actual, además de Copiar enlace y Más apps.
+- Copiar solo se ejecuta al elegirlo: primero usa Clipboard API, luego `execCommand` y, si ambos fallan, muestra el enlace seleccionado para copia manual. Más apps usa Web Share cuando existe; cancelar o encontrar un error no activa la copia.
+- La hoja, Correo y Copiar enlace siguen disponibles sin conexión. Los destinos sociales requieren red y su contenido de terceros nunca entra en la caché de Termia.
 
 ## Desarrollo local
 

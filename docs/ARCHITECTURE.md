@@ -14,9 +14,9 @@ flowchart LR
   CACHE --> UI
 ```
 
-`conversion.js` contiene fórmulas y validación sin DOM. `app.js` presenta resultados. `pwa.js` controla instalación, tema, ayuda, actualización, Window Controls Overlay y Compartir. La cabecera conserva exactamente cinco controles; el único Compartir usa Web Share o copia la URL actual mediante Clipboard API y fallback, y anuncia el resultado en una región viva.
+`conversion.js` contiene fórmulas y validación sin DOM. `app.js` presenta resultados. `pwa.js` controla instalación, tema, ayuda, actualización, Window Controls Overlay y Compartir. La cabecera conserva exactamente cinco controles y un único Compartir. Este abre un `<dialog>` independiente —centrado en escritorio y como hoja inferior en móvil— cuyos destinos de WhatsApp, Telegram, Facebook, X y Correo se generan al abrir desde `window.location.href`. Más apps invoca Web Share solo tras su selección explícita; si no existe se desactiva sin afectar las alternativas. Copiar enlace es la única ruta al portapapeles y encadena Clipboard API, `execCommand` y selección manual accesible, sin copiar ante cancelaciones o errores de Web Share.
 
-El manifest prioriza `window-controls-overlay` con fallback `standalone`. La cabecera usa las variables `titlebar-area-*` y sus controles son `app-region: no-drag`. Sin WCO conserva una cabecera web normal. El service worker mantiene su flujo explícito de actualización.
+El manifest prioriza `window-controls-overlay` con fallback `standalone`. La cabecera usa las variables `titlebar-area-*` y sus controles son `app-region: no-drag`. Sin WCO conserva una cabecera web normal. El service worker mantiene su flujo explícito de actualización, precarga los mismos 14 recursos del shell y solo intercepta solicitudes del mismo origen. La hoja, Correo y la copia funcionan desde el shell sin conexión; los destinos sociales necesitan red y nunca se almacenan en Cache Storage.
 
 ## Publicación web
 

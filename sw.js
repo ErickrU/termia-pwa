@@ -1,4 +1,4 @@
-const VERSION = 'termia-v2';
+const VERSION = 'termia-v3';
 const CACHE_ESTATICO = `${VERSION}-estatico`;
 const CACHE_PAGINAS = `${VERSION}-paginas`;
 const RECURSOS = [

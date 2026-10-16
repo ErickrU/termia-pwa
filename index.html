@@ -106,11 +106,61 @@
       <p>Escribe una temperatura con punto o coma decimal y elige su unidad. Las cuatro equivalencias, el termómetro y la categoría se actualizan al instante.</p>
       <ul>
         <li><strong>Instalar:</strong> añade Termia a tu dispositivo cuando el navegador lo permita.</li>
-        <li><strong>Compartir:</strong> envía o copia el enlace actual.</li>
+        <li><strong>Compartir:</strong> abre opciones para enviar o copiar explícitamente el enlace actual.</li>
         <li><strong>Tema:</strong> alterna entre apariencia clara y oscura.</li>
         <li><strong>Restablecer:</strong> vuelve a 20 °C.</li>
         <li><strong>Ayuda:</strong> abre esta guía; ciérrala con Escape.</li>
       </ul>
+    </div>
+  </dialog>
+
+  <dialog id="dialogo-compartir" class="dialogo-compartir" aria-labelledby="titulo-compartir" aria-describedby="descripcion-compartir">
+    <div class="dialogo-contenido dialogo-compartir-contenido">
+      <button type="button" id="cerrar-compartir" class="cerrar-dialogo" aria-label="Cerrar opciones para compartir" title="Cerrar">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+      <p class="etiqueta">Compartir</p>
+      <h2 id="titulo-compartir">Comparte Termia</h2>
+      <p id="descripcion-compartir">Elige una opción. Solo se comparte el título público y la dirección actual.</p>
+
+      <div class="opciones-compartir" aria-label="Opciones para compartir">
+        <a id="compartir-whatsapp" class="opcion-compartir opcion-whatsapp" href="#" target="_blank" rel="noopener noreferrer">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11.6a8 8 0 0 1-11.8 7L4 20l1.4-4.1A8 8 0 1 1 20 11.6Z"/><path d="M8.2 7.8c.4 3.8 2.2 5.7 6 7l1.5-1.5"/></svg>
+          <span>WhatsApp</span>
+        </a>
+        <a id="compartir-telegram" class="opcion-compartir opcion-telegram" href="#" target="_blank" rel="noopener noreferrer">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m3 11 17-7-5 16-4-6-4 3 1-5 8-5"/></svg>
+          <span>Telegram</span>
+        </a>
+        <a id="compartir-facebook" class="opcion-compartir opcion-facebook" href="#" target="_blank" rel="noopener noreferrer">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M14 21v-8h3l.5-4H14V7c0-1.2.7-2 2.2-2H18V2.2c-.7-.1-1.7-.2-2.8-.2C12.4 2 10 3.8 10 7.3V9H7v4h3v8"/></svg>
+          <span>Facebook</span>
+        </a>
+        <a id="compartir-x" class="opcion-compartir opcion-x" href="#" target="_blank" rel="noopener noreferrer">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4 19 20M19 4 5 20"/></svg>
+          <span>X</span>
+        </a>
+        <a id="compartir-correo" class="opcion-compartir opcion-correo" href="mailto:">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>
+          <span>Correo</span>
+        </a>
+        <button type="button" id="copiar-enlace" class="opcion-compartir opcion-copiar">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+          <span>Copiar enlace</span>
+        </button>
+        <button type="button" id="mas-apps" class="opcion-compartir opcion-mas-apps" aria-describedby="mas-apps-no-disponible">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.5m-7.6 6.9 7.6 4.5"/></svg>
+          <span>Más apps</span>
+        </button>
+      </div>
+
+      <p id="mas-apps-no-disponible" class="aviso-compartir" hidden>«Más apps» no está disponible en este navegador. Las demás opciones siguen funcionando.</p>
+      <p id="estado-compartir" class="estado-compartir" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div id="copia-manual" class="copia-manual" hidden>
+        <label for="enlace-copia-manual">Copia el enlace manualmente</label>
+        <input id="enlace-copia-manual" type="text" readonly spellcheck="false" aria-describedby="instruccion-copia-manual">
+        <p id="instruccion-copia-manual">El enlace está seleccionado. Usa el comando de copiar de tu dispositivo.</p>
+      </div>
     </div>
   </dialog>
 

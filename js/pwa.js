@@ -5,12 +5,29 @@ const botonCompartir = document.querySelector('#control-compartir');
 const botonTema = document.querySelector('#control-tema');
 const botonRestablecer = document.querySelector('#control-restablecer');
 const botonAyuda = document.querySelector('#control-ayuda');
-const dialogo = document.querySelector('#dialogo-ayuda');
+const dialogoAyuda = document.querySelector('#dialogo-ayuda');
 const cerrarAyuda = document.querySelector('#cerrar-ayuda');
+const dialogoCompartir = document.querySelector('#dialogo-compartir');
+const cerrarCompartir = document.querySelector('#cerrar-compartir');
+const enlaceWhatsApp = document.querySelector('#compartir-whatsapp');
+const enlaceTelegram = document.querySelector('#compartir-telegram');
+const enlaceFacebook = document.querySelector('#compartir-facebook');
+const enlaceX = document.querySelector('#compartir-x');
+const enlaceCorreo = document.querySelector('#compartir-correo');
+const botonCopiar = document.querySelector('#copiar-enlace');
+const botonMasApps = document.querySelector('#mas-apps');
+const avisoMasApps = document.querySelector('#mas-apps-no-disponible');
+const estadoCompartir = document.querySelector('#estado-compartir');
+const copiaManual = document.querySelector('#copia-manual');
+const enlaceCopiaManual = document.querySelector('#enlace-copia-manual');
 const estadoPwa = document.querySelector('#estado-pwa');
+const TITULO_COMPARTIR = 'Termia — Convertidor de temperatura';
+const TEXTO_COMPARTIR = 'Convierte temperaturas con Termia.';
 let solicitudInstalacion = null;
 let recargaAceptada = false;
-let focoAntesDelDialogo = null;
+let focoAntesDeAyuda = null;
+let focoAntesDeCompartir = null;
+let temporizadorCierreCompartir = null;
 let temporizadorGeometria = null;
 
 function estaInstalada() {
@@ -19,6 +36,10 @@ function estaInstalada() {
 
 function anunciar(mensaje) {
   estadoPwa.textContent = mensaje;
+}
+
+function anunciarCompartir(mensaje) {
+  estadoCompartir.textContent = mensaje;
 }
 
 function actualizarInstalacion() {
@@ -57,59 +78,168 @@ botonInstalar.addEventListener('click', async () => {
   anunciar(eleccion.outcome === 'accepted' ? 'Instalación aceptada.' : 'Instalación cancelada.');
 });
 
+function construirUrlCompartir(base, parametros) {
+  const destino = new URL(base);
+  destino.search = new URLSearchParams(parametros).toString();
+  return destino.href;
+}
+
+function prepararOpcionesCompartir() {
+  const enlace = window.location.href;
+  enlaceWhatsApp.href = construirUrlCompartir('https://wa.me/', {
+    text: `${TEXTO_COMPARTIR} ${enlace}`
+  });
+  enlaceTelegram.href = construirUrlCompartir('https://t.me/share/url', {
+    url: enlace,
+    text: TEXTO_COMPARTIR
+  });
+  enlaceFacebook.href = construirUrlCompartir('https://www.facebook.com/sharer/sharer.php', {
+    u: enlace
+  });
+  enlaceX.href = construirUrlCompartir('https://twitter.com/intent/tweet', {
+    text: TEXTO_COMPARTIR,
+    url: enlace
+  });
+  enlaceCorreo.href = `mailto:?${new URLSearchParams({
+    subject: TITULO_COMPARTIR,
+    body: `${TEXTO_COMPARTIR}\n\n${enlace}`
+  }).toString()}`;
+
+  const compartirNativoDisponible = typeof navigator.share === 'function';
+  botonMasApps.disabled = !compartirNativoDisponible;
+  avisoMasApps.hidden = compartirNativoDisponible;
+}
+
+function ocultarCopiaManual() {
+  copiaManual.hidden = true;
+  enlaceCopiaManual.value = '';
+}
+
+function abrirCompartir() {
+  focoAntesDeCompartir = botonCompartir;
+  window.clearTimeout(temporizadorCierreCompartir);
+  temporizadorCierreCompartir = null;
+  anunciarCompartir('');
+  ocultarCopiaManual();
+  prepararOpcionesCompartir();
+  dialogoCompartir.showModal();
+  cerrarCompartir.focus({ preventScroll: true });
+}
+
+function cerrarDialogoCompartir() {
+  window.clearTimeout(temporizadorCierreCompartir);
+  temporizadorCierreCompartir = null;
+  if (dialogoCompartir.open) dialogoCompartir.close();
+}
+
+function cerrarCompartirTrasConfirmacion() {
+  window.clearTimeout(temporizadorCierreCompartir);
+  temporizadorCierreCompartir = window.setTimeout(() => {
+    temporizadorCierreCompartir = null;
+    if (dialogoCompartir.open) dialogoCompartir.close();
+  }, 900);
+}
+
+function confirmarCopia() {
+  anunciarCompartir('Enlace copiado al portapapeles.');
+  cerrarCompartirTrasConfirmacion();
+}
+
 function copiarConComando(enlace) {
+  const focoAnterior = document.activeElement;
   const campo = document.createElement('textarea');
   campo.value = enlace;
   campo.className = 'campo-copia-portapapeles';
   campo.setAttribute('readonly', '');
   campo.setAttribute('aria-hidden', 'true');
   document.body.append(campo);
+  campo.focus({ preventScroll: true });
   campo.select();
   campo.setSelectionRange(0, campo.value.length);
-  const copiado = document.execCommand('copy');
-  campo.remove();
-  if (!copiado) throw new Error('El navegador rechazó la copia.');
+
+  try {
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    campo.remove();
+    if (focoAnterior?.isConnected) focoAnterior.focus({ preventScroll: true });
+  }
 }
 
 async function copiarEnlace() {
   const enlace = window.location.href;
+  ocultarCopiaManual();
+  anunciarCompartir('');
+
   if (navigator.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(enlace);
-      anunciar('Enlace copiado al portapapeles.');
+      confirmarCopia();
       return;
     } catch {
-      // Continúa con el fallback compatible con navegadores anteriores.
+      // Continúa con el fallback iniciado por la misma selección explícita.
     }
   }
 
-  copiarConComando(enlace);
-  anunciar('Enlace copiado al portapapeles.');
+  if (copiarConComando(enlace)) {
+    confirmarCopia();
+    return;
+  }
+
+  enlaceCopiaManual.value = enlace;
+  copiaManual.hidden = false;
+  anunciarCompartir('No se pudo copiar automáticamente. El enlace está seleccionado para copiarlo manualmente.');
+  enlaceCopiaManual.focus({ preventScroll: true });
+  enlaceCopiaManual.select();
 }
 
-botonCompartir.addEventListener('click', async () => {
-  try {
-    if (typeof navigator.share === 'function') {
-      await navigator.share({
-        title: document.title,
-        text: 'Convierte temperaturas con Termia.',
-        url: window.location.href
-      });
-      anunciar('Termia se compartió correctamente.');
-    } else {
-      await copiarEnlace();
-    }
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      anunciar('Se canceló la acción de compartir.');
-      return;
-    }
+function manejarResultadoCompartir(error) {
+  if (error?.name === 'AbortError') {
+    anunciarCompartir('');
+    return;
+  }
+  anunciarCompartir('No se pudo abrir el menú de aplicaciones. Elige otra opción.');
+}
 
-    try {
-      await copiarEnlace();
-    } catch {
-      anunciar('No se pudo compartir. Copia la dirección desde el navegador.');
-    }
+botonCompartir.addEventListener('click', abrirCompartir);
+cerrarCompartir.addEventListener('click', cerrarDialogoCompartir);
+dialogoCompartir.addEventListener('click', (evento) => {
+  if (evento.target === dialogoCompartir) cerrarDialogoCompartir();
+});
+dialogoCompartir.addEventListener('close', () => {
+  window.clearTimeout(temporizadorCierreCompartir);
+  temporizadorCierreCompartir = null;
+  if (focoAntesDeCompartir?.isConnected) focoAntesDeCompartir.focus({ preventScroll: true });
+});
+
+for (const enlaceDestino of [enlaceWhatsApp, enlaceTelegram, enlaceFacebook, enlaceX, enlaceCorreo]) {
+  enlaceDestino.addEventListener('click', () => {
+    window.setTimeout(cerrarDialogoCompartir, 0);
+  });
+}
+
+botonCopiar.addEventListener('click', copiarEnlace);
+botonMasApps.addEventListener('click', () => {
+  if (typeof navigator.share !== 'function') {
+    botonMasApps.disabled = true;
+    avisoMasApps.hidden = false;
+    anunciarCompartir('El menú de aplicaciones no está disponible en este navegador.');
+    return;
+  }
+
+  try {
+    const operacion = navigator.share({
+      title: TITULO_COMPARTIR,
+      text: TEXTO_COMPARTIR,
+      url: window.location.href
+    });
+    Promise.resolve(operacion).then(() => {
+      anunciar('Termia se compartió correctamente.');
+      cerrarDialogoCompartir();
+    }, manejarResultadoCompartir);
+  } catch (error) {
+    manejarResultadoCompartir(error);
   }
 });
 
@@ -132,22 +262,22 @@ botonRestablecer.addEventListener('click', () => {
 });
 
 function abrirAyuda() {
-  focoAntesDelDialogo = document.activeElement;
-  dialogo.showModal();
+  focoAntesDeAyuda = document.activeElement;
+  dialogoAyuda.showModal();
   cerrarAyuda.focus();
 }
 
-function cerrarDialogo() {
-  dialogo.close();
+function cerrarDialogoAyuda() {
+  dialogoAyuda.close();
 }
 
 botonAyuda.addEventListener('click', abrirAyuda);
-cerrarAyuda.addEventListener('click', cerrarDialogo);
-dialogo.addEventListener('click', (evento) => {
-  if (evento.target === dialogo) cerrarDialogo();
+cerrarAyuda.addEventListener('click', cerrarDialogoAyuda);
+dialogoAyuda.addEventListener('click', (evento) => {
+  if (evento.target === dialogoAyuda) cerrarDialogoAyuda();
 });
-dialogo.addEventListener('close', () => {
-  if (focoAntesDelDialogo?.isConnected) focoAntesDelDialogo.focus();
+dialogoAyuda.addEventListener('close', () => {
+  if (focoAntesDeAyuda?.isConnected) focoAntesDeAyuda.focus();
 });
 
 function sincronizarWco() {

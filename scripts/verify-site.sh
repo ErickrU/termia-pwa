@@ -77,15 +77,39 @@ CONTROL_COUNT="$(grep -o 'data-control-ventana' "$TMP_DIR/index.html" | wc -l | 
 SHARE_COUNT="$(grep -o 'id="control-compartir"' "$TMP_DIR/index.html" | wc -l | tr -d ' ')"
 [[ "$CONTROL_COUNT" == '5' ]] || { printf 'ERROR: deben existir exactamente cinco controles WCO.\n' >&2; exit 1; }
 [[ "$SHARE_COUNT" == '1' ]] || { printf 'ERROR: debe existir un único control Compartir.\n' >&2; exit 1; }
+grep -Eq 'id="dialogo-compartir"[^>]+aria-labelledby="titulo-compartir"[^>]+aria-describedby="descripcion-compartir"' "$TMP_DIR/index.html" || { printf 'ERROR: falta la hoja Compartir accesible.\n' >&2; exit 1; }
+grep -Eq 'id="estado-compartir"[^>]+role="status"[^>]+aria-live="polite"' "$TMP_DIR/index.html" || { printf 'ERROR: falta feedback accesible en Compartir.\n' >&2; exit 1; }
+grep -Fq 'id="enlace-copia-manual"' "$TMP_DIR/index.html" || { printf 'ERROR: falta la copia manual accesible.\n' >&2; exit 1; }
+for provider in compartir-whatsapp compartir-telegram compartir-facebook compartir-x; do
+  grep -Eq "id=\"$provider\"[^>]+target=\"_blank\"[^>]+rel=\"noopener noreferrer\"" "$TMP_DIR/index.html" || {
+    printf 'ERROR: %s no abre de forma segura.\n' "$provider" >&2
+    exit 1
+  }
+done
+for label in WhatsApp Telegram Facebook X Correo 'Copiar enlace' 'Más apps'; do
+  grep -Fq ">$label<" "$TMP_DIR/index.html" || { printf 'ERROR: falta la opción %s.\n' "$label" >&2; exit 1; }
+done
+
+grep -Fq "botonCompartir.addEventListener('click', abrirCompartir)" "$TMP_DIR/js-pwa.js" || { printf 'ERROR: Compartir no abre su hoja propia.\n' >&2; exit 1; }
 grep -Fq 'const enlace = window.location.href' "$TMP_DIR/js-pwa.js" || { printf 'ERROR: Compartir no usa la URL actual.\n' >&2; exit 1; }
-grep -Fq "typeof navigator.share === 'function'" "$TMP_DIR/js-pwa.js" || { printf 'ERROR: falta Web Share.\n' >&2; exit 1; }
+grep -Fq 'new URLSearchParams' "$TMP_DIR/js-pwa.js" || { printf 'ERROR: los destinos no codifican sus parámetros.\n' >&2; exit 1; }
+for endpoint in 'https://wa.me/' 'https://t.me/share/url' 'https://www.facebook.com/sharer/sharer.php' 'https://twitter.com/intent/tweet' 'mailto:?'; do
+  grep -Fq "$endpoint" "$TMP_DIR/js-pwa.js" || { printf 'ERROR: falta el destino %s.\n' "$endpoint" >&2; exit 1; }
+done
+grep -Fq "typeof navigator.share !== 'function'" "$TMP_DIR/js-pwa.js" || { printf 'ERROR: falta el estado sin Web Share.\n' >&2; exit 1; }
+grep -Fq "error?.name === 'AbortError'" "$TMP_DIR/js-pwa.js" || { printf 'ERROR: falta tratar la cancelación nativa.\n' >&2; exit 1; }
+grep -Fq "botonCopiar.addEventListener('click', copiarEnlace)" "$TMP_DIR/js-pwa.js" || { printf 'ERROR: Copiar enlace no es una selección explícita.\n' >&2; exit 1; }
 grep -Fq 'navigator.clipboard?.writeText' "$TMP_DIR/js-pwa.js" || { printf 'ERROR: falta Clipboard API.\n' >&2; exit 1; }
 grep -Fq "document.execCommand('copy')" "$TMP_DIR/js-pwa.js" || { printf 'ERROR: falta el fallback de copia.\n' >&2; exit 1; }
-grep -Eq 'id="estado-pwa"[^>]+role="status"[^>]+aria-live="polite"' "$TMP_DIR/index.html" || { printf 'ERROR: falta feedback accesible.\n' >&2; exit 1; }
+grep -Fq 'copiaManual.hidden = false' "$TMP_DIR/js-pwa.js" || { printf 'ERROR: falta el fallback de selección manual.\n' >&2; exit 1; }
+grep -Fq "const VERSION = 'termia-v3'" "$TMP_DIR/sw.js" || { printf 'ERROR: el shell no usa la versión de caché esperada.\n' >&2; exit 1; }
+grep -Fq 'origin !== self.location.origin' "$TMP_DIR/sw.js" || { printf 'ERROR: el service worker no limita la caché al mismo origen.\n' >&2; exit 1; }
+! grep -Eq 'https?://(wa\.me|t\.me|www\.facebook\.com|twitter\.com)' "$TMP_DIR/sw.js" || { printf 'ERROR: el service worker incluye contenido de terceros.\n' >&2; exit 1; }
+grep -Eq 'id="estado-pwa"[^>]+role="status"[^>]+aria-live="polite"' "$TMP_DIR/index.html" || { printf 'ERROR: falta feedback PWA accesible.\n' >&2; exit 1; }
 node -e '
   const manifest = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
   if (JSON.stringify(manifest.display_override) !== JSON.stringify(["window-controls-overlay", "standalone"])) process.exit(1);
 ' "$TMP_DIR/manifest.webmanifest" || { printf 'ERROR: el manifest no conserva WCO.\n' >&2; exit 1; }
 
-printf '  ✓ HTTPS, cabeceras, PWA, cinco controles, Compartir e iconos\n'
+printf '  ✓ HTTPS, cabeceras, PWA, cinco controles, hoja Compartir e iconos\n'
 printf 'Sitio publicado correctamente.\n'
