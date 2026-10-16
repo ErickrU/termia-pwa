@@ -1,0 +1,246 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Termia: PWA estática con bucket S3 privado, CloudFront, Origin Access
+  Control y cabeceras de seguridad.
+
+Parameters:
+  ProjectSlug:
+    Type: String
+    Default: termia-pwa
+    Description: Identificador corto para etiquetas y nombres lógicos.
+    AllowedPattern: '^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$'
+    ConstraintDescription: Usa 3-32 caracteres en minúscula, números o guiones.
+
+  Environment:
+    Type: String
+    Description: Entorno lógico de la aplicación.
+    AllowedValues:
+      - dev
+      - test
+      - stage
+      - prod
+
+  DeploymentId:
+    Type: String
+    Description: Identificador estable derivado localmente de cuenta, región y stack.
+    AllowedPattern: '^[a-f0-9]{10}$'
+    ConstraintDescription: Debe contener exactamente 10 caracteres hexadecimales.
+
+  PriceClass:
+    Type: String
+    Default: PriceClass_100
+    Description: Cobertura de ubicaciones de borde de CloudFront.
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+
+Resources:
+  ContentBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectSlug
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: DeploymentId
+          Value: !Ref DeploymentId
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Repository
+          Value: ErickrU-termia-pwa
+        - Key: DataClassification
+          Value: PublicStaticContent
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${ProjectSlug}-${Environment}-${DeploymentId}-oac'
+        Description: !Sub 'Acceso firmado de CloudFront al origen de ${ProjectSlug}'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  SecurityHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${ProjectSlug}-${Environment}-${DeploymentId}-security'
+        Comment: Cabeceras de seguridad para la PWA Termia
+        SecurityHeadersConfig:
+          ContentSecurityPolicy:
+            ContentSecurityPolicy: >-
+              default-src 'self'; base-uri 'self'; object-src 'none';
+              frame-ancestors 'none'; form-action 'self'; script-src 'self';
+              style-src 'self'; img-src 'self'; connect-src 'self';
+              font-src 'self'; manifest-src 'self'; worker-src 'self';
+              upgrade-insecure-requests
+            Override: true
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 47304000
+            IncludeSubdomains: false
+            Preload: false
+            Override: true
+        CustomHeadersConfig:
+          Items:
+            - Header: Permissions-Policy
+              Value: >-
+                accelerometer=(), autoplay=(), camera=(), clipboard-read=(),
+                clipboard-write=(self), display-capture=(), encrypted-media=(),
+                fullscreen=(), geolocation=(), gyroscope=(), magnetometer=(),
+                microphone=(), midi=(), payment=(), picture-in-picture=(),
+                publickey-credentials-get=(), screen-wake-lock=(), serial=(),
+                usb=(), web-share=(self), xr-spatial-tracking=()
+              Override: true
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub '${ProjectSlug}-${Environment}: PWA estática'
+        Enabled: true
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: !Ref PriceClass
+        Origins:
+          - Id: S3PrivateOrigin
+            DomainName: !GetAtt ContentBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: S3PrivateOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          DefaultTTL: 3600
+          MaxTTL: 86400
+          MinTTL: 0
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectSlug
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: DeploymentId
+          Value: !Ref DeploymentId
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Repository
+          Value: ErickrU-termia-pwa
+
+  ContentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ContentBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action:
+              - s3:GetObject
+            Resource: !Sub '${ContentBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub >-
+                  arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt ContentBucket.Arn
+              - !Sub '${ContentBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+Outputs:
+  DeploymentMarker:
+    Description: Marcador inmutable que verifican los scripts.
+    Value: termia-pwa-cloudfront-oac-v1
+
+  DeploymentId:
+    Description: Identificador estable de esta creación.
+    Value: !Ref DeploymentId
+
+  Environment:
+    Description: Entorno lógico desplegado.
+    Value: !Ref Environment
+
+  SiteUrl:
+    Description: URL HTTPS pública de la PWA.
+    Value: !Sub 'https://${Distribution.DomainName}'
+
+  DistributionId:
+    Description: Identificador de la distribución creada.
+    Value: !Ref Distribution
+
+  DistributionArn:
+    Description: ARN de la distribución creada.
+    Value: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+
+  DistributionDomainName:
+    Description: Dominio asignado por CloudFront.
+    Value: !GetAtt Distribution.DomainName
+
+  OriginAccessControlId:
+    Description: Identificador del OAC creado.
+    Value: !GetAtt OriginAccessControl.Id
+
+  SecurityHeadersPolicyId:
+    Description: Identificador de la política de cabeceras creada.
+    Value: !Ref SecurityHeadersPolicy
+
+  ContentBucketName:
+    Description: Nombre generado del bucket privado.
+    Value: !Ref ContentBucket
+
+  ContentBucketArn:
+    Description: ARN del bucket privado.
+    Value: !GetAtt ContentBucket.Arn
+
+  ContentBucketRegionalDomainName:
+    Description: Endpoint regional privado usado como origen.
+    Value: !GetAtt ContentBucket.RegionalDomainName

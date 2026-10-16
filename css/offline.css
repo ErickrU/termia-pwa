@@ -1,0 +1,20 @@
+body {
+  display: grid;
+  min-height: 100vh;
+  margin: 0;
+  place-items: center;
+  background: #f7f4ff;
+  color: #201b35;
+  font: 18px/1.6 system-ui, sans-serif;
+}
+
+main {
+  max-width: 34rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+a {
+  color: #6847d9;
+  font-weight: 700;
+}

@@ -1,0 +1,31 @@
+.DS_Store
+node_modules/
+npm-debug.log*
+*.log
+.coverage/
+_site/
+
+# Configuración local y secretos
+.env
+.env.*
+*.credentials
+credentials.json
+.aws/
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Estado y salidas locales de AWS
+.aws-change-set.json
+.aws-deployment.json
+deployment-outputs*.json
+aws-outputs*.json
+cdk-outputs*.json
+infra/packaged*.yaml
+
+# Metadatos de agentes locales
+.agents/

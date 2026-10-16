@@ -1,0 +1,50 @@
+name: Publicar en GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  desplegar:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4.2.2
+        with:
+          persist-credentials: false
+      - name: Validar aplicación
+        run: npm run check && npm test
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5.0.0
+      - name: Preparar artefacto público exacto
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _site/css _site/js _site/iconos
+          cp index.html offline.html manifest.webmanifest sw.js _site/
+          cp css/estilos.css css/offline.css _site/css/
+          cp js/app.js js/conversion.js js/pwa.js _site/js/
+          cp iconos/favicon.svg iconos/icono-192.png iconos/icono-512.png \
+            iconos/icono-maskable-512.png iconos/apple-touch-icon.png _site/iconos/
+          test -z "$(find _site -type l -print -quit)"
+          test "$(find _site -type f | wc -l | tr -d ' ')" = "14"
+      - name: Subir artefacto de Pages
+        uses: actions/upload-pages-artifact@v3.0.1
+        with:
+          path: _site
+      - name: Publicar
+        id: deployment
+        uses: actions/deploy-pages@v4.0.5

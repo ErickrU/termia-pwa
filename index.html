@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es" data-tema="claro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f4ff">
+  <meta name="description" content="Convierte temperaturas entre Celsius, Fahrenheit, Kelvin y Rankine, incluso sin conexión.">
+  <title>Termia — Convertidor de temperatura</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./iconos/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./iconos/apple-touch-icon.png">
+  <link rel="stylesheet" href="./css/estilos.css">
+</head>
+<body>
+  <header class="barra-titulo" data-barra-titulo>
+    <a class="marca" href="./" aria-label="Termia, inicio">
+      <svg aria-hidden="true" viewBox="0 0 32 32"><path d="M13 5a3 3 0 0 1 6 0v13.1a7 7 0 1 1-6 0V5Z"/><path d="M16 10v12"/></svg>
+      <span><strong>Termia</strong><small>Temperatura clara</small></span>
+    </a>
+    <div class="zona-arrastre" aria-hidden="true"></div>
+    <nav class="controles-titulo" aria-label="Controles de la aplicación">
+      <button type="button" id="control-instalar" data-control-ventana aria-label="Instalar aplicación" title="Instalar aplicación">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg><span>Instalar</span>
+      </button>
+      <button type="button" id="control-compartir" data-control-ventana aria-label="Compartir conversor" title="Compartir conversor">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.5m-7.6 6.9 7.6 4.5"/></svg><span>Compartir</span>
+      </button>
+      <button type="button" id="control-tema" data-control-ventana aria-label="Cambiar tema" title="Cambiar tema">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 15.2A8 8 0 0 1 8.8 4 8 8 0 1 0 20 15.2Z"/></svg><span>Tema</span>
+      </button>
+      <button type="button" id="control-restablecer" data-control-ventana aria-label="Restablecer a 20 grados Celsius" title="Restablecer a 20 °C">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4v6h6M5.5 15a7 7 0 1 0 .4-7.5L4 10"/></svg><span>Restablecer</span>
+      </button>
+      <button type="button" id="control-ayuda" data-control-ventana aria-label="Abrir ayuda" title="Abrir ayuda">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.3 2.3 0 1 1 3.7 1.8c-1 .7-1.5 1.2-1.5 2.2m0 3.5h.01"/></svg><span>Ayuda</span>
+      </button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="presentacion" aria-labelledby="titulo-principal">
+      <p class="etiqueta">Conversión precisa y visual</p>
+      <h1 id="titulo-principal">La temperatura,<br><em>en cualquier escala.</em></h1>
+      <p>Convierte entre Celsius, Fahrenheit, Kelvin y Rankine. Comprende el resultado de un vistazo con una escala térmica interactiva.</p>
+    </section>
+
+    <section class="panel-conversion" aria-labelledby="titulo-conversion">
+      <div class="panel-entrada">
+        <div>
+          <p class="etiqueta">Valor de origen</p>
+          <h2 id="titulo-conversion">¿Qué temperatura quieres convertir?</h2>
+        </div>
+        <div class="entrada-compuesta">
+          <label for="temperatura">Temperatura</label>
+          <input id="temperatura" name="temperatura" type="text" value="20" inputmode="decimal" autocomplete="off" aria-describedby="error-entrada">
+          <label for="unidad-origen">Unidad de origen</label>
+          <select id="unidad-origen" name="unidad-origen">
+            <option value="C">Celsius (°C)</option>
+            <option value="F">Fahrenheit (°F)</option>
+            <option value="K">Kelvin (K)</option>
+            <option value="R">Rankine (°R)</option>
+          </select>
+        </div>
+        <p id="error-entrada" class="mensaje-error" role="alert" aria-live="polite"></p>
+        <div class="presets" aria-label="Temperaturas de referencia">
+          <button type="button" data-preset="-273.15" data-unidad="C"><strong>−273,15 °C</strong><span>Cero absoluto</span></button>
+          <button type="button" data-preset="0" data-unidad="C"><strong>0 °C</strong><span>Congelación</span></button>
+          <button type="button" data-preset="20" data-unidad="C"><strong>20 °C</strong><span>Ambiente</span></button>
+          <button type="button" data-preset="100" data-unidad="C"><strong>100 °C</strong><span>Ebullición</span></button>
+        </div>
+      </div>
+
+      <div class="panel-resultados" aria-live="polite" aria-atomic="true">
+        <div class="resumen-termico">
+          <div>
+            <p class="etiqueta">Sensación térmica</p>
+            <p id="categoria" class="categoria">Templado</p>
+            <p id="saturacion" class="saturacion">Dentro de la escala visual</p>
+          </div>
+          <div class="termometro" role="img" aria-label="Termómetro: 20 grados Celsius">
+            <div class="termometro-tubo"><span id="nivel-termometro"></span></div>
+            <div class="termometro-bulbo"></div>
+            <div class="escala" aria-hidden="true"><span>50°</span><span>25°</span><span>0°</span><span>−25°</span><span>−50°</span></div>
+          </div>
+        </div>
+        <div id="equivalencias" class="equivalencias">
+          <article data-unidad-resultado="C"><span>Celsius</span><strong id="resultado-C">20 °C</strong></article>
+          <article data-unidad-resultado="F"><span>Fahrenheit</span><strong id="resultado-F">68 °F</strong></article>
+          <article data-unidad-resultado="K"><span>Kelvin</span><strong id="resultado-K">293.15 K</strong></article>
+          <article data-unidad-resultado="R"><span>Rankine</span><strong id="resultado-R">527.67 °R</strong></article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p><strong>Termia</strong> funciona sin conexión.</p>
+    <p id="estado-pwa" role="status" aria-live="polite">Preparando uso sin conexión…</p>
+  </footer>
+
+  <dialog id="dialogo-ayuda" aria-labelledby="titulo-ayuda">
+    <div class="dialogo-contenido">
+      <button type="button" id="cerrar-ayuda" class="cerrar-dialogo" aria-label="Cerrar ayuda" title="Cerrar ayuda">×</button>
+      <p class="etiqueta">Guía rápida</p>
+      <h2 id="titulo-ayuda">Cómo usar Termia</h2>
+      <p>Escribe una temperatura con punto o coma decimal y elige su unidad. Las cuatro equivalencias, el termómetro y la categoría se actualizan al instante.</p>
+      <ul>
+        <li><strong>Instalar:</strong> añade Termia a tu dispositivo cuando el navegador lo permita.</li>
+        <li><strong>Compartir:</strong> envía o copia el enlace actual.</li>
+        <li><strong>Tema:</strong> alterna entre apariencia clara y oscura.</li>
+        <li><strong>Restablecer:</strong> vuelve a 20 °C.</li>
+        <li><strong>Ayuda:</strong> abre esta guía; ciérrala con Escape.</li>
+      </ul>
+    </div>
+  </dialog>
+
+  <script type="module" src="./js/app.js"></script>
+  <script type="module" src="./js/pwa.js"></script>
+</body>
+</html>
