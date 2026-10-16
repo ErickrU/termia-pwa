@@ -19,7 +19,7 @@ Un intento fallido queda intacto y bloquea reintentos automáticos. `DO_NOTHING`
 - identidad, profile y región iguales a sus hashes aprobados;
 - dos fuentes de ausencia cuyo fin queda a menos de 60 segundos del inicio capturado de `CreateChangeSet`, con el request ID exacto de `DescribeStacks` corroborado por CloudTrail;
 - request `CREATE` revisado y ligado a la captura real, con descripción ligada al template, nombre/token internos, `OnStackFailure=DO_NOTHING` y todas las opciones fuera de alcance vacías;
-- respuesta y evento `CreateChangeSet` correlacionados por identidad, nombre, token, descripción e identificadores;
+- respuesta y evento `CreateChangeSet` correlacionados por operación exitosa, identidad, región, tiempo, stack, nombre, token e ID del change set; sus campos opcionales pueden faltar, pero nunca contradecir el request, la respuesta o los snapshots sellados;
 - placeholder `REVIEW_IN_PROGRESS` sin recursos, outputs ni template aplicado;
 - un único change set `CREATE_COMPLETE/AVAILABLE`, sin role, notificaciones, imports ni rollback triggers;
 - parámetros, tags, modo `STANDARD` y capabilities exactos;

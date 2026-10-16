@@ -288,6 +288,12 @@ function validationOptions(now = '2026-10-16T12:01:10Z') {
 function applyMutation(proof, mutation) {
   switch (mutation) {
     case null: return;
+    case 'cloudtrail-observed-sparse': {
+      const eventRequest = proof.create.cloudTrailCreateChangeSet.requestParameters;
+      for (const field of ['changeSetType', 'description', 'onStackFailure', 'parameters', 'tags']) delete eventRequest[field];
+      delete proof.create.cloudTrailCreateChangeSet.responseElements.stackId;
+      return;
+    }
     case 'remote-question-mark': {
       const changed = Buffer.from('Resources?\n', 'ascii');
       proof.snapshots.prepare.remoteTemplateBodyBase64 = changed.toString('base64');
@@ -356,6 +362,44 @@ test('acepta ChangeSetType ausente o nulo, pero nunca contradictorio', () => {
   assert.equal(validateAwsProof(proof, validationOptions()).createCorrelated, true);
 });
 
+test('execute falla cerrado si el token del puntero difiere de la evidencia sellada', () => {
+  const proof = validProof();
+  const pointer = {
+    attemptId,
+    stackName: CONTRACT.stackName,
+    stackId,
+    changeSetName,
+    changeSetId,
+    clientToken,
+    profile: identity.profile,
+    region: identity.region,
+    commitSha,
+    identitySha256: identityHash,
+    templateSha256: sha256(templateBytes)
+  };
+  const attempt = {
+    attemptId,
+    stackName: CONTRACT.stackName,
+    changeSetName,
+    clientToken,
+    profile: identity.profile,
+    region: identity.region,
+    commitSha,
+    confirmedIdentitySha: identityHash,
+    templateSha256: sha256(templateBytes)
+  };
+  const options = {
+    ...validationOptions(),
+    executionBinding: { pointer, attempt }
+  };
+  assert.equal(validateAwsProof(proof, options).createCorrelated, true);
+  options.executionBinding.pointer = { ...pointer, clientToken: 'termia-pwa-pointer-alterado' };
+  assert.throws(
+    () => validateAwsProof(proof, options),
+    (error) => error?.code === 'EXECUTE_BINDING'
+  );
+});
+
 test('execute falla cerrado si falta el snapshot TOCTOU', () => {
   const proof = validProof();
   delete proof.snapshots.toctou;
@@ -394,6 +438,24 @@ test('correlaciona la descripción y rechaza opciones de request no revisadas', 
     () => validateAwsProof(cloudTrailRole, validationOptions()),
     (error) => error?.code === 'CREATE_SCOPE'
   );
+
+  const cloudTrailContradictions = [
+    ['CREATE_TYPE', (proof) => { proof.create.cloudTrailCreateChangeSet.requestParameters.changeSetType = 'UPDATE'; }],
+    ['CREATE_CLOUDTRAIL', (proof) => { proof.create.cloudTrailCreateChangeSet.requestParameters.description = 'Termia template distinto'; }],
+    ['ON_STACK_FAILURE', (proof) => { proof.create.cloudTrailCreateChangeSet.requestParameters.onStackFailure = 'DELETE'; }],
+    ['PARAMETERS', (proof) => { proof.create.cloudTrailCreateChangeSet.requestParameters.parameters = []; }],
+    ['TAGS', (proof) => { proof.create.cloudTrailCreateChangeSet.requestParameters.tags = []; }],
+    ['CREATE_CLOUDTRAIL', (proof) => { proof.create.cloudTrailCreateChangeSet.responseElements.stackId = 'fixture-stack-distinto'; }]
+  ];
+  for (const [expectedCode, mutate] of cloudTrailContradictions) {
+    const proof = validProof();
+    mutate(proof);
+    assert.throws(
+      () => validateAwsProof(proof, validationOptions()),
+      (error) => error?.code === expectedCode,
+      `CloudTrail contradictorio debe fallar con ${expectedCode}`
+    );
+  }
 
   const describedNotification = validProof();
   describedNotification.snapshots.prepare.describeChangeSet.NotificationARNs = ['fixture-notification'];

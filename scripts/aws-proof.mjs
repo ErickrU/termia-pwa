@@ -348,9 +348,15 @@ function validateCreate(create, context, identity, reviewedRequestTime, deployme
   const eventRequest = requireObject(trail.requestParameters, 'CREATE_CLOUDTRAIL', 'requestParameters');
   requireCondition(eventRequest.stackName === CONTRACT.stackName && eventRequest.changeSetName === changeSetName, 'CREATE_CLOUDTRAIL', 'CloudTrail registra otros nombres.');
   requireCondition(eventRequest.clientToken === clientToken, 'CLIENT_TOKEN', 'CloudTrail no conserva el client token exacto.');
-  requireCondition(eventRequest.changeSetType === 'CREATE', 'CREATE_TYPE', 'CloudTrail no registra CREATE.');
-  requireCondition(eventRequest.description === expectedDescription(templateSha), 'CREATE_CLOUDTRAIL', 'CloudTrail no registra la descripción revisada.');
-  requireCondition(eventRequest.onStackFailure === 'DO_NOTHING', 'ON_STACK_FAILURE', 'CloudTrail no registra DO_NOTHING.');
+  if (eventRequest.changeSetType !== undefined && eventRequest.changeSetType !== null) {
+    requireCondition(eventRequest.changeSetType === 'CREATE', 'CREATE_TYPE', 'CloudTrail contradice el request CREATE.');
+  }
+  if (eventRequest.description !== undefined && eventRequest.description !== null) {
+    requireCondition(eventRequest.description === expectedDescription(templateSha), 'CREATE_CLOUDTRAIL', 'CloudTrail contradice la descripción revisada.');
+  }
+  if (eventRequest.onStackFailure !== undefined && eventRequest.onStackFailure !== null) {
+    requireCondition(eventRequest.onStackFailure === 'DO_NOTHING', 'ON_STACK_FAILURE', 'CloudTrail contradice DO_NOTHING.');
+  }
   requireOptionalFalse(eventRequest.disableRollback, 'DISABLE_ROLLBACK', 'CloudTrail DisableRollback');
   requireOptionalFalse(eventRequest.includeNestedStacks, 'CREATE_SCOPE', 'CloudTrail IncludeNestedStacks');
   requireOptionalFalse(eventRequest.importExistingResources, 'CREATE_SCOPE', 'CloudTrail ImportExistingResources');
@@ -369,11 +375,17 @@ function validateCreate(create, context, identity, reviewedRequestTime, deployme
       requireCondition(typeof body === 'string' && sha256(body) === templateSha, 'TEMPLATE_HASH', 'CloudTrail registra otro cuerpo de plantilla.');
     }
   }
-  requireExactCollection(normalizedParameters(eventRequest.parameters), expectedParameters(deploymentId), 'PARAMETERS', 'Los parámetros CloudTrail');
-  requireExactCollection(normalizedTags(eventRequest.tags), expectedTags(deploymentId), 'TAGS', 'Los tags CloudTrail');
+  if (eventRequest.parameters !== undefined && eventRequest.parameters !== null) {
+    requireExactCollection(normalizedParameters(eventRequest.parameters), expectedParameters(deploymentId), 'PARAMETERS', 'Los parámetros CloudTrail');
+  }
+  if (eventRequest.tags !== undefined && eventRequest.tags !== null) {
+    requireExactCollection(normalizedTags(eventRequest.tags), expectedTags(deploymentId), 'TAGS', 'Los tags CloudTrail');
+  }
   const eventResponse = requireObject(trail.responseElements, 'CREATE_CLOUDTRAIL', 'responseElements');
   requireCondition((eventResponse.id ?? eventResponse.changeSetId) === response.changeSetId, 'CREATE_CLOUDTRAIL', 'El ID del change set no correlaciona.');
-  requireCondition(eventResponse.stackId === response.stackId, 'CREATE_CLOUDTRAIL', 'El ID del stack no correlaciona.');
+  if (eventResponse.stackId !== undefined && eventResponse.stackId !== null) {
+    requireCondition(eventResponse.stackId === response.stackId, 'CREATE_CLOUDTRAIL', 'El ID del stack contradice la respuesta guardada.');
+  }
   return { requestedAt, respondedAt, changeSetId: response.changeSetId, stackId: response.stackId };
 }
 
@@ -509,6 +521,26 @@ export function validateAwsProof(evidence, options) {
   const now = options.now instanceof Date ? options.now.getTime() : Date.parse(options.now ?? new Date());
   requireCondition(Number.isFinite(now) && latest <= now + 5_000, 'TIMESTAMP_FUTURE', 'La evidencia tiene timestamps futuros.');
   requireCondition(now - freshnessStartedAt <= CONTRACT.maxFreshnessMs, 'TIMESTAMP_STALE', 'La observación más antigua del snapshot final supera 300 segundos.');
+
+  if (options.executionBinding !== undefined) {
+    requireCondition(phase === 'execute', 'EXECUTE_BINDING', 'La vinculación de ejecución solo admite evidencia execute.');
+    const binding = requireObject(options.executionBinding, 'EXECUTE_BINDING', 'La vinculación de ejecución');
+    const pointer = requireObject(binding.pointer, 'EXECUTE_BINDING', 'El puntero privado');
+    const attempt = requireObject(binding.attempt, 'EXECUTE_BINDING', 'El intento sellado');
+    const response = requireObject(value.create?.response, 'EXECUTE_BINDING', 'La respuesta de creación aprobada');
+    const bindingMatches =
+      pointer.attemptId === context.attemptId && attempt.attemptId === context.attemptId &&
+      pointer.stackName === CONTRACT.stackName && attempt.stackName === CONTRACT.stackName &&
+      pointer.profile === context.profile && attempt.profile === context.profile &&
+      pointer.region === context.region && attempt.region === context.region &&
+      pointer.commitSha === context.commitSha && attempt.commitSha === context.commitSha &&
+      pointer.identitySha256 === context.identitySha256 && attempt.confirmedIdentitySha === context.identitySha256 &&
+      pointer.templateSha256 === template.sha256 && attempt.templateSha256 === template.sha256 &&
+      pointer.changeSetName === context.changeSetName && attempt.changeSetName === context.changeSetName &&
+      pointer.stackId === response.stackId && pointer.changeSetId === response.changeSetId &&
+      pointer.clientToken === context.clientToken && attempt.clientToken === context.clientToken;
+    requireCondition(bindingMatches, 'EXECUTE_BINDING', 'El puntero, el intento sellado y la evidencia aprobada no coinciden exactamente.');
+  }
 
   return {
     fixedTarget: true,

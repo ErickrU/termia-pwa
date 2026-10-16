@@ -480,7 +480,6 @@ cmp -s "$TEMPLATE" "$ATTEMPT_DIR/toctou-commit-template.yaml" || fail 'HEAD ya n
 
 STACK_ID="$(jq -er '.stackId' "$CHANGE_STATE")"
 CHANGE_SET_ID="$(jq -er '.changeSetId' "$CHANGE_STATE")"
-CLIENT_TOKEN="$(jq -er '.clientToken' "$CHANGE_STATE")"
 
 capture_command toctou-identity "${AWS[@]}" sts get-caller-identity --output json
 require_capture_success 'No se pudo verificar la identidad inmediatamente antes de execute.'
@@ -521,10 +520,15 @@ node "$VALIDATOR" guard-execute \
   --template "$TEMPLATE" \
   --commit-template "$ATTEMPT_DIR/commit-template.yaml" \
   --chain "$ATTEMPT_DIR/chain-input-execute.json" \
+  --pointer "$CHANGE_STATE" \
+  --attempt "$ATTEMPT_DIR/attempt.json" \
   --expected-commit-sha "$CONFIRM_COMMIT_SHA" \
   --expected-identity-sha "$CONFIRM_IDENTITY_SHA" \
   --requested-at "$EXECUTE_REQUESTED_AT" \
   --output "$ATTEMPT_DIR/execute-guard.json"
+STACK_ID="$(jq -er '.execution.stackId' "$ATTEMPT_DIR/execute-guard.json")"
+CHANGE_SET_ID="$(jq -er '.execution.changeSetId' "$ATTEMPT_DIR/execute-guard.json")"
+CLIENT_TOKEN="$(jq -er '.execution.clientToken' "$ATTEMPT_DIR/execute-guard.json")"
 capture_command_at execute-change-set "$EXECUTE_REQUESTED_AT" "${AWS[@]}" cloudformation execute-change-set \
   --change-set-name "$CHANGE_SET_ID" --stack-name "$STACK_ID" \
   --client-request-token "$CLIENT_TOKEN"

@@ -96,12 +96,18 @@ test('normaliza la identidad y captura el request ID antes de crear', () => {
   assert.match(script, /--identity "\$ATTEMPT_DIR\/identity\.json"/);
 });
 
-test('repite el guard TOCTOU con el timestamp capturado inmediatamente antes de execute', () => {
+test('repite el guard TOCTOU y sella el token usado por execute', () => {
   const block = script.match(/EXECUTE_REQUESTED_AT="\$\(utc_now\)"[\s\S]+?require_capture_success 'CloudFormation no aceptó la ejecución;/)?.[0];
   assert.ok(block, 'debe existir el guard final ligado a execute');
   assert.match(block, /guard-execute[\s\S]+?--requested-at "\$EXECUTE_REQUESTED_AT"/);
+  assert.match(block, /--pointer "\$CHANGE_STATE"/);
+  assert.match(block, /--attempt "\$ATTEMPT_DIR\/attempt\.json"/);
+  assert.match(block, /CLIENT_TOKEN="\$\(jq -er '\.execution\.clientToken' "\$ATTEMPT_DIR\/execute-guard\.json"\)"/);
   assert.match(block, /capture_command_at execute-change-set "\$EXECUTE_REQUESTED_AT"/);
   assert.match(block, /verify-execute-capture/);
+  assert.doesNotMatch(script, /CLIENT_TOKEN="\$\(jq -er '\.clientToken' "\$CHANGE_STATE"\)"/);
+  assert.ok(block.indexOf('guard-execute') < block.indexOf("'.execution.clientToken'"));
+  assert.ok(block.indexOf("'.execution.clientToken'") < block.indexOf('capture_command_at execute-change-set'));
   assert.doesNotMatch(block, /\b(?:report|seal)\b/);
 });
 
@@ -315,14 +321,9 @@ test('build y validate completan un intento sintético con identidad persistida'
       requestParameters: {
         stackName: CONTRACT.stackName,
         changeSetName: attempt.changeSetName,
-        changeSetType: 'CREATE',
-        clientToken: attempt.clientToken,
-        description: `Termia template ${sha256(templateBytes)}`,
-        onStackFailure: 'DO_NOTHING',
-        parameters,
-        tags
+        clientToken: attempt.clientToken
       },
-      responseElements: { id: changeSetId, stackId }
+      responseElements: { id: changeSetId }
     });
 
     const changes = Object.entries(CONTRACT.logicalResources).map(([LogicalResourceId, ResourceType]) => ({

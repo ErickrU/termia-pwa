@@ -462,7 +462,7 @@ function validateEvidence(args, now = new Date()) {
   const attemptDirectory = dirname(evidencePath);
   verifyChain(attemptDirectory, chainPath);
   const evidence = readJson(evidencePath, 'EVIDENCE');
-  const summary = validateAwsProof(evidence, {
+  const validationOptions = {
     phase: required(args, '--phase'),
     templateBytes: readFileSync(required(args, '--template')),
     commitTemplateBytes: readFileSync(required(args, '--commit-template')),
@@ -470,7 +470,18 @@ function validateEvidence(args, now = new Date()) {
     expectedIdentitySha: required(args, '--expected-identity-sha'),
     inputChainSha256: sha256(readFileSync(chainPath)),
     now
-  });
+  };
+  if (args.has('--pointer') || args.has('--attempt')) {
+    const pointerPath = resolve(required(args, '--pointer'));
+    const attemptPath = resolve(required(args, '--attempt'));
+    requirePrivateFile(pointerPath);
+    requirePrivateFile(attemptPath);
+    validationOptions.executionBinding = {
+      pointer: readJson(pointerPath, 'EXECUTE_BINDING'),
+      attempt: readJson(attemptPath, 'EXECUTE_BINDING')
+    };
+  }
+  const summary = validateAwsProof(evidence, validationOptions);
   return { evidence, evidencePath, chainPath, summary };
 }
 
@@ -491,6 +502,11 @@ function commandGuardExecute(args) {
     toctouObservedAt: evidence.snapshots.toctou.observedAt,
     evidenceSha256: sha256(readFileSync(evidencePath)),
     chainSha256: sha256(readFileSync(chainPath)),
+    execution: {
+      stackId: evidence.create.response.stackId,
+      changeSetId: evidence.create.response.changeSetId,
+      clientToken: evidence.context.clientToken
+    },
     checks: summary
   });
 }

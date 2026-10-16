@@ -1,0 +1,5 @@
+{
+  "name": "cloudtrail-observed-sparse",
+  "mutation": "cloudtrail-observed-sparse",
+  "expectedCode": "PASS"
+}
