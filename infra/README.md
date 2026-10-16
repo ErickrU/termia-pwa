@@ -14,7 +14,7 @@ La plantilla no fija nombres físicos ni contiene cuentas, ARN, buckets, distrib
 
 `DeletionPolicy: Retain` conserva el bucket ante rollback de creación o eliminación del stack. `UpdateReplacePolicy: Retain` conserva el recurso anterior ante un reemplazo autorizado por separado. El almacenamiento, las versiones y los recursos parciales pueden generar costos; no existe cleanup automático.
 
-El único target propuesto por `deploy-aws.sh` es `termia-pwa-public-prod`. Si ya existe o no puede probarse su ausencia, el script hace STOP y nunca update, delete ni cambio de nombre. `prepare` usa `CREATE`, un client token generado internamente y `OnStackFailure=DO_NOTHING`; `execute` exige una segunda autorización y repite la validación con TOCTOU máximo de 300 segundos.
+El único target propuesto por `deploy-aws.sh` es `termia-pwa-public-prod`. Si ya existe o no puede probarse su ausencia, el script hace STOP y nunca update, delete ni cambio de nombre. `prepare` persiste la identidad normalizada, liga ambos probes al inicio real de la captura `CreateChangeSet`, exige el request ID exacto de `DescribeStacks` en CloudTrail y usa `CREATE`, un client token generado internamente y `OnStackFailure=DO_NOTHING`. `execute` exige una segunda autorización y repite la validación con TOCTOU máximo de 300 segundos inmediatamente antes de la llamada.
 
 La evidencia completa se guarda fuera de Git en `.aws-attempts/` con modos `0700/0600`; los reportes compartibles solo contienen hashes y booleanos. La validación no exige `ChangeSetType` en la respuesta de `DescribeChangeSet`, pero rechaza cualquier valor contradictorio y exige exactamente cinco `Add` allowlisted.
 

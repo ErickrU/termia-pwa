@@ -42,10 +42,10 @@ CloudFormation define exactamente bucket, OAC, política de cabeceras, distribuc
 
 El único target propuesto es `termia-pwa-public-prod`, con `prod` y `PriceClass_100` fijados internamente. Cualquier existencia o incertidumbre produce STOP; no hay update, delete, fallback de nombre ni cleanup.
 
-`prepare` genera internamente un attempt ID, nombre de change set y client token, y conserva evidencia privada `0700/0600`. Dos probes de ausencia preceden inmediatamente al request `CREATE`; CloudTrail correlaciona identidad, región, stack, nombre, token y respuesta. El template remoto debe coincidir byte por byte con la plantilla ASCII+LF y con el blob del commit.
+`prepare` genera internamente un attempt ID, nombre de change set y client token, persiste la identidad normalizada antes de crear y conserva evidencia privada `0700/0600`. Dos probes de ausencia preceden al inicio capturado de `CreateChangeSet` por un máximo de 60 segundos; CloudTrail debe igualar el request ID exacto de `DescribeStacks` y correlacionar identidad, región, stack, nombre, token y respuesta. El template remoto debe coincidir byte por byte con la plantilla ASCII+LF y con el blob del commit.
 
 El validador deriva la semántica `CREATE` de todas las fuentes en conjunción. No depende de que `DescribeChangeSet` devuelva `ChangeSetType`, campo que puede estar ausente; sí rechaza contradicciones. Exige placeholder `REVIEW_IN_PROGRESS` vacío, un solo change set disponible, `OnStackFailure=DO_NOTHING`, modo `STANDARD`, parámetros/tags exactos y cinco `Add` allowlisted.
 
-Antes de execute se repite la conjunción con un snapshot TOCTOU de máximo 300 segundos. Los valores completos quedan privados; los reportes compartibles solo contienen hashes y booleanos. Este workflow no hizo llamadas AWS.
+Antes de execute se repite la conjunción con un snapshot TOCTOU de máximo 300 segundos. Después del reporte y el sellado, un segundo guard completo se ejecuta inmediatamente antes de la llamada y comparte su timestamp UTC con la captura de `execute-change-set`, por lo que una demora posterior al primer PASS falla cerrada. Los valores completos quedan privados; los reportes compartibles solo contienen hashes y booleanos. Este workflow no hizo llamadas AWS.
 
 La CSP permite únicamente recursos del mismo origen; Web Share y escritura al portapapeles se limitan a `self`. HSTS no incluye subdominios porque el certificado predeterminado usa un dominio compartido que el proyecto no controla.

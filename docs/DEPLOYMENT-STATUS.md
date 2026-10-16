@@ -8,7 +8,7 @@ El único target propuesto es `termia-pwa-public-prod`. Su nombre no está reser
 
 ## Evidencia local esperada
 
-Cada intento futuro conserva datos completos únicamente en `.aws-attempts/<attempt-id>/` (`0700`, archivos `0600`) y en el puntero `.aws-change-set.json` (`0600`). El intento incluye timestamps UTC, profile, región, identidad, stack, nombre de change set, client token, request/respuesta, template y commit SHA, respuestas remotas y una cadena de hashes write-once. Los reportes compartibles contienen solo hashes y booleanos.
+Cada intento futuro conserva datos completos únicamente en `.aws-attempts/<attempt-id>/` (`0700`, archivos `0600`) y en el puntero `.aws-change-set.json` (`0600`). El intento incluye timestamps UTC, profile, región, identidad normalizada antes de crear, stack, nombre de change set, client token, request/respuesta, inicio real de cada captura, template y commit SHA, respuestas remotas y una cadena de hashes write-once. Los reportes compartibles contienen solo hashes y booleanos.
 
 Un intento fallido queda intacto y bloquea reintentos automáticos. `DO_NOTHING`, `DeletionPolicy: Retain`, `UpdateReplacePolicy: Retain`, versionado y recursos parciales pueden conservar costos. No existe cleanup automático; la recuperación exige una autorización posterior separada.
 
@@ -17,14 +17,14 @@ Un intento fallido queda intacto y bloquea reintentos automáticos. `DO_NOTHING`
 - commit limpio y template local idéntico al blob aprobado;
 - template ASCII con LF e igualdad byte por byte con `GetTemplate`;
 - identidad, profile y región iguales a sus hashes aprobados;
-- dos fuentes de ausencia inmediatamente anteriores y evento CloudTrail correlacionado;
-- request `CREATE` con nombre/token internos y `OnStackFailure=DO_NOTHING`;
+- dos fuentes de ausencia cuyo fin queda a menos de 60 segundos del inicio capturado de `CreateChangeSet`, con el request ID exacto de `DescribeStacks` corroborado por CloudTrail;
+- request `CREATE` revisado y ligado a la captura real, con nombre/token internos y `OnStackFailure=DO_NOTHING`;
 - respuesta y evento `CreateChangeSet` correlacionados;
 - placeholder `REVIEW_IN_PROGRESS` sin recursos, outputs ni template aplicado;
 - un único change set `CREATE_COMPLETE/AVAILABLE`;
 - parámetros, tags, modo `STANDARD` y capabilities exactos;
 - exactamente cinco acciones `Add` allowlisted;
-- snapshot TOCTOU completo de antigüedad máxima de 300 segundos.
+- snapshot TOCTOU completo de antigüedad máxima de 300 segundos, revalidado contra el timestamp capturado inmediatamente antes de `execute-change-set`.
 
 `ChangeSetType` no forma parte obligatoria de la respuesta `DescribeChangeSet`; su ausencia o valor nulo no invalida la prueba. Un valor contradictorio sí la invalida.
 

@@ -176,6 +176,7 @@ function validProof() {
         absent: true,
         errorCode: 'ValidationError',
         exitCode: 254,
+        requestId: 'fixture-absence-request',
         requestedAt: '2026-10-16T12:00:05Z',
         respondedAt: '2026-10-16T12:00:06Z',
         stdoutSha256: sha256(''),
@@ -233,6 +234,7 @@ function validProof() {
       response: {
         changeSetId,
         stackId,
+        requestedAt: '2026-10-16T12:00:10Z',
         respondedAt: '2026-10-16T12:00:12Z',
         stdoutSha256: sha256('synthetic response'),
         stderrSha256: sha256('')
@@ -299,6 +301,12 @@ function applyMutation(proof, mutation) {
     case 'on-stack-failure-null': proof.create.request.onStackFailure = null; return;
     case 'stale-timestamp': return;
     case 'identity-mismatch': proof.snapshots.toctou.identity.principalArn = `${principalArn}-different`; return;
+    case 'absence-request-id-mismatch': proof.preflight.cloudTrailDescribeStacks.requestId = 'fixture-unrelated-request'; return;
+    case 'stale-preflight-capture':
+      proof.create.response.requestedAt = '2026-10-16T12:01:09Z';
+      proof.create.response.respondedAt = '2026-10-16T12:01:11Z';
+      proof.create.cloudTrailCreateChangeSet.eventTime = '2026-10-16T12:01:10Z';
+      return;
     case 'missing-absence-source': delete proof.preflight.listChangeSets; return;
     case 'remote-lf-mismatch': {
       const changed = Buffer.concat([templateBytes, Buffer.from('\n')]);
@@ -346,6 +354,15 @@ test('execute falla cerrado si falta el snapshot TOCTOU', () => {
   const proof = validProof();
   delete proof.snapshots.toctou;
   assert.throws(() => validateAwsProof(proof, validationOptions()), (error) => error?.code === 'TOCTOU_REQUIRED');
+});
+
+test('el guard final rechaza una demora posterior al primer PASS', () => {
+  const proof = validProof();
+  assert.equal(validateAwsProof(proof, validationOptions('2026-10-16T12:01:10Z')).toctouFresh, true);
+  assert.throws(
+    () => validateAwsProof(proof, validationOptions('2026-10-16T12:06:06Z')),
+    (error) => error?.code === 'TIMESTAMP_STALE'
+  );
 });
 
 test('la plantilla versionada es ASCII, LF y byte-estable', () => {

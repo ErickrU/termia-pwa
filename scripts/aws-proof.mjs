@@ -235,7 +235,10 @@ function validateCapture(capture, expectedOperation, context, identityHash, code
   requireCondition(requestedAt <= respondedAt, code, 'El intervalo del probe es inválido.');
   requireSha(value.stdoutSha256, code, 'El hash de stdout');
   requireSha(value.stderrSha256, code, 'El hash de stderr');
-  return { requestedAt, respondedAt };
+  const requestId = expectedOperation === 'DescribeStacks'
+    ? requireString(value.requestId, code, 'DescribeStacks requestId')
+    : value.requestId ?? null;
+  return { requestedAt, respondedAt, requestId };
 }
 
 function validateCloudTrailIdentity(event, identity, context, code) {
@@ -247,14 +250,14 @@ function validateCloudTrailIdentity(event, identity, context, code) {
   return parseUtc(event.eventTime, code, 'CloudTrail eventTime');
 }
 
-function validatePreflight(preflight, context, identity, identityHash, createRequestedAt) {
+function validatePreflight(preflight, context, identity, identityHash, createCaptureRequestedAt) {
   const value = requireObject(preflight, 'PREFLIGHT', 'El preflight');
   requireCondition(hasOwn(value, 'describeStacks') && hasOwn(value, 'listChangeSets'), 'ABSENCE_SOURCE', 'Falta una de las dos fuentes locales de ausencia.');
   const describe = validateCapture(value.describeStacks, 'DescribeStacks', context, identityHash, 'ABSENCE_DESCRIBE');
   const list = validateCapture(value.listChangeSets, 'ListChangeSets', context, identityHash, 'ABSENCE_LIST');
   for (const result of [describe, list]) {
-    requireCondition(result.respondedAt <= createRequestedAt, 'ABSENCE_ORDER', 'Los probes deben terminar antes de CreateChangeSet.');
-    requireCondition(createRequestedAt - result.respondedAt <= CONTRACT.maxPreflightGapMs, 'ABSENCE_ORDER', 'Los probes no son inmediatamente anteriores al create.');
+    requireCondition(result.respondedAt <= createCaptureRequestedAt, 'ABSENCE_ORDER', 'Los probes deben terminar antes de la captura real de CreateChangeSet.');
+    requireCondition(createCaptureRequestedAt - result.respondedAt <= CONTRACT.maxPreflightGapMs, 'ABSENCE_ORDER', 'Los probes no son inmediatamente anteriores a la captura real de CreateChangeSet.');
   }
 
   const trail = requireObject(value.cloudTrailDescribeStacks, 'ABSENCE_CLOUDTRAIL', 'El evento DescribeStacks');
@@ -262,6 +265,7 @@ function validatePreflight(preflight, context, identity, identityHash, createReq
   requireCondition(trail.stackName === CONTRACT.stackName, 'ABSENCE_CLOUDTRAIL', 'CloudTrail consultó otro stack.');
   requireCondition(trail.errorCode === 'ValidationError', 'ABSENCE_CLOUDTRAIL', 'CloudTrail no demuestra ausencia.');
   const eventTime = validateCloudTrailIdentity(trail, identity, context, 'ABSENCE_CLOUDTRAIL');
+  requireCondition(trail.requestId === describe.requestId, 'ABSENCE_CLOUDTRAIL', 'CloudTrail no corresponde al request ID exacto del probe DescribeStacks.');
   requireCondition(eventTime >= describe.requestedAt - 5_000 && eventTime <= describe.respondedAt + 5_000, 'ABSENCE_CLOUDTRAIL', 'El evento no correlaciona temporalmente con el probe.');
 }
 
@@ -283,25 +287,28 @@ function validateRequest(request, context, deploymentId, templateSha, clientToke
   return parseUtc(value.requestedAt, 'CREATE_REQUEST', 'CreateChangeSet.requestedAt');
 }
 
-function validateCreate(create, context, identity, requestTime, deploymentId, templateSha, clientToken, changeSetName) {
+function validateCreate(create, context, identity, reviewedRequestTime, deploymentId, templateSha, clientToken, changeSetName) {
   const value = requireObject(create, 'CREATE', 'La evidencia de creación');
   const request = value.request;
   const parsedRequestTime = validateRequest(request, context, deploymentId, templateSha, clientToken, changeSetName);
-  requireCondition(parsedRequestTime === requestTime, 'CREATE_REQUEST', 'El timestamp del request no coincide.');
+  requireCondition(parsedRequestTime === reviewedRequestTime, 'CREATE_REQUEST', 'El timestamp del request revisado no coincide.');
   const response = requireObject(value.response, 'CREATE_RESPONSE', 'La respuesta CreateChangeSet');
   requireString(response.changeSetId, 'CREATE_RESPONSE', 'changeSetId');
   requireString(response.stackId, 'CREATE_RESPONSE', 'stackId');
   requireCondition(response.changeSetId.includes(changeSetName), 'CREATE_RESPONSE', 'El ID no pertenece al change set generado.');
   requireCondition(response.stackId.includes(CONTRACT.stackName), 'CREATE_RESPONSE', 'El ID no pertenece al stack fijado.');
-  const respondedAt = parseUtc(response.respondedAt, 'CREATE_RESPONSE', 'CreateChangeSet.respondedAt');
-  requireCondition(requestTime <= respondedAt, 'CREATE_RESPONSE', 'La respuesta precede al request.');
+  const requestedAt = parseUtc(response.requestedAt, 'CREATE_RESPONSE', 'CreateChangeSet.capture.requestedAt');
+  const respondedAt = parseUtc(response.respondedAt, 'CREATE_RESPONSE', 'CreateChangeSet.capture.respondedAt');
+  requireCondition(reviewedRequestTime <= requestedAt, 'CREATE_REQUEST', 'La captura real de CreateChangeSet precede al request revisado.');
+  requireCondition(requestedAt - reviewedRequestTime <= CONTRACT.maxPreflightGapMs, 'CREATE_REQUEST', 'El request revisado quedó obsoleto antes de la captura real.');
+  requireCondition(requestedAt <= respondedAt, 'CREATE_RESPONSE', 'La respuesta precede al inicio real de la captura.');
   requireSha(response.stdoutSha256, 'CREATE_RESPONSE', 'El hash de la respuesta');
   requireSha(response.stderrSha256, 'CREATE_RESPONSE', 'El hash del error');
 
   const trail = requireObject(value.cloudTrailCreateChangeSet, 'CREATE_CLOUDTRAIL', 'El evento CreateChangeSet');
   requireCondition(trail.eventName === 'CreateChangeSet' && (trail.errorCode === null || trail.errorCode === undefined), 'CREATE_CLOUDTRAIL', 'CloudTrail no registra un CreateChangeSet exitoso.');
   const eventTime = validateCloudTrailIdentity(trail, identity, context, 'CREATE_CLOUDTRAIL');
-  requireCondition(eventTime >= requestTime - 5_000 && eventTime <= respondedAt + 5_000, 'CREATE_CLOUDTRAIL', 'El evento CreateChangeSet no correlaciona temporalmente.');
+  requireCondition(eventTime >= requestedAt - 5_000 && eventTime <= respondedAt + 5_000, 'CREATE_CLOUDTRAIL', 'El evento CreateChangeSet no correlaciona con la captura real.');
   const eventRequest = requireObject(trail.requestParameters, 'CREATE_CLOUDTRAIL', 'requestParameters');
   requireCondition(eventRequest.stackName === CONTRACT.stackName && eventRequest.changeSetName === changeSetName, 'CREATE_CLOUDTRAIL', 'CloudTrail registra otros nombres.');
   requireCondition(eventRequest.clientToken === clientToken, 'CLIENT_TOKEN', 'CloudTrail no conserva el client token exacto.');
@@ -313,7 +320,7 @@ function validateCreate(create, context, identity, requestTime, deploymentId, te
   const eventResponse = requireObject(trail.responseElements, 'CREATE_CLOUDTRAIL', 'responseElements');
   requireCondition((eventResponse.id ?? eventResponse.changeSetId) === response.changeSetId, 'CREATE_CLOUDTRAIL', 'El ID del change set no correlaciona.');
   requireCondition(eventResponse.stackId === response.stackId, 'CREATE_CLOUDTRAIL', 'El ID del stack no correlaciona.');
-  return { respondedAt, changeSetId: response.changeSetId, stackId: response.stackId };
+  return { requestedAt, respondedAt, changeSetId: response.changeSetId, stackId: response.stackId };
 }
 
 function validateChanges(changes) {
@@ -419,10 +426,10 @@ export function validateAwsProof(evidence, options) {
   const expectedDeploymentId = deriveDeploymentId(identity.accountId, context.region);
   requireCondition(context.deploymentId === expectedDeploymentId, 'DEPLOYMENT_ID', 'DeploymentId no deriva de cuenta, región y stack.');
 
-  const requestTime = parseUtc(value.create?.request?.requestedAt, 'CREATE_REQUEST', 'CreateChangeSet.requestedAt');
-  requireCondition(requestTime >= createdAt, 'CREATE_REQUEST', 'CreateChangeSet precede al intento.');
-  validatePreflight(value.preflight, context, identity, context.identitySha256, requestTime);
-  const create = validateCreate(value.create, context, identity, requestTime, expectedDeploymentId, template.sha256, context.clientToken, context.changeSetName);
+  const reviewedRequestTime = parseUtc(value.create?.request?.requestedAt, 'CREATE_REQUEST', 'CreateChangeSet.requestedAt');
+  requireCondition(reviewedRequestTime >= createdAt, 'CREATE_REQUEST', 'CreateChangeSet precede al intento.');
+  const create = validateCreate(value.create, context, identity, reviewedRequestTime, expectedDeploymentId, template.sha256, context.clientToken, context.changeSetName);
+  validatePreflight(value.preflight, context, identity, context.identitySha256, create.requestedAt);
   const prepare = validateSnapshot(value.snapshots?.prepare, 'prepare-review', context, identity, context.identitySha256, expectedDeploymentId, templateBytes, create);
   requireCondition(prepare.startedAt >= create.respondedAt, 'SNAPSHOT_TIME', 'El snapshot prepare precede a la creación.');
 
@@ -468,16 +475,17 @@ export function normalizeCloudTrailEvent(event) {
   };
 }
 
-export function selectCloudTrailEvent(events, { kind, context, identity }) {
+export function selectCloudTrailEvent(events, { kind, context, identity, expectedRequestId = null }) {
   requireCondition(Array.isArray(events), 'CLOUDTRAIL_EVENTS', 'Events debe ser una lista.');
   const expectedName = kind === 'absence' ? 'DescribeStacks' : 'CreateChangeSet';
+  if (kind === 'absence') requireString(expectedRequestId, 'ABSENCE_CLOUDTRAIL', 'DescribeStacks requestId esperado');
   const matches = events.map((entry) => {
     const raw = typeof entry.CloudTrailEvent === 'string' ? JSON.parse(entry.CloudTrailEvent) : entry;
     return { raw, normalized: normalizeCloudTrailEvent(raw) };
   }).filter(({ normalized }) => {
     if (normalized.eventName !== expectedName || normalized.awsRegion !== context.region || normalized.recipientAccountId !== identity.accountId || normalized.principalArn !== identity.principalArn) return false;
     if (normalized.requestParameters.stackName !== CONTRACT.stackName) return false;
-    if (kind === 'absence') return normalized.errorCode === 'ValidationError';
+    if (kind === 'absence') return normalized.errorCode === 'ValidationError' && normalized.requestId === expectedRequestId;
     return normalized.errorCode === null && normalized.requestParameters.changeSetName === context.changeSetName && normalized.requestParameters.clientToken === context.clientToken;
   });
   requireCondition(matches.length <= 1, 'CLOUDTRAIL_AMBIGUOUS', 'Más de un evento CloudTrail coincide con el intento.');

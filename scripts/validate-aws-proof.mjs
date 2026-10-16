@@ -128,6 +128,21 @@ function readSuccessfulJsonCapture(attemptDirectory, prefix) {
   }
 }
 
+function extractAwsRequestId(stderr) {
+  const text = stderr.toString('utf8');
+  const patterns = [
+    /["']x-amzn-requestid["']\s*:\s*["']([A-Za-z0-9-]{8,128})["']/gi,
+    /<RequestId>([A-Za-z0-9-]{8,128})<\/RequestId>/gi,
+    /\bRequestId\s*[:=]\s*["']?([A-Za-z0-9-]{8,128})["']?/gi
+  ];
+  const matches = new Set();
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) matches.add(match[1]);
+  }
+  requireCondition(matches.size === 1, 'ABSENCE_REQUEST_ID', 'El probe DescribeStacks debe capturar un único request ID del servicio.');
+  return [...matches][0];
+}
+
 function absenceRecord(attemptDirectory, prefix, operation, attempt, identity, identityHash) {
   const capture = readCapture(attemptDirectory, prefix);
   const stderr = capture.stderr.toString('utf8');
@@ -142,6 +157,7 @@ function absenceRecord(attemptDirectory, prefix, operation, attempt, identity, i
     absent: true,
     errorCode: 'ValidationError',
     exitCode: capture.exitCode,
+    requestId: operation === 'DescribeStacks' ? extractAwsRequestId(capture.stderr) : null,
     requestedAt: capture.requestedAt,
     respondedAt: capture.respondedAt,
     stdoutSha256: capture.stdoutSha256,
@@ -267,6 +283,12 @@ function commandCaptureRecord(args) {
   });
 }
 
+function commandNormalizeIdentity(args) {
+  const attempt = readJson(required(args, '--attempt'), 'ATTEMPT');
+  const identity = normalizeIdentity(readJson(required(args, '--identity'), 'IDENTITY'), attempt);
+  writeExclusiveJson(resolve(required(args, '--output')), identity);
+}
+
 function commandCreateRequest(args) {
   const attempt = readJson(required(args, '--attempt'), 'ATTEMPT');
   const identity = normalizeIdentity(readJson(required(args, '--identity'), 'IDENTITY'), attempt);
@@ -310,10 +332,25 @@ function commandSelectCloudTrail(args) {
   const identity = normalizeIdentity(readJson(required(args, '--identity'), 'IDENTITY'), attempt);
   const lookup = readJson(required(args, '--input'), 'CLOUDTRAIL_EVENTS');
   requireCondition(Array.isArray(lookup.Events), 'CLOUDTRAIL_EVENTS', 'LookupEvents no devolvió Events.');
+  const kind = required(args, '--kind');
+  let expectedRequestId = null;
+  if (kind === 'absence') {
+    const attemptDirectory = resolve(required(args, '--attempt-dir'));
+    requirePrivateDirectory(attemptDirectory);
+    expectedRequestId = absenceRecord(
+      attemptDirectory,
+      required(args, '--probe-prefix'),
+      'DescribeStacks',
+      attempt,
+      identity,
+      identitySha256(identity)
+    ).requestId;
+  }
   const selected = selectCloudTrailEvent(lookup.Events, {
-    kind: required(args, '--kind'),
+    kind,
     context: attempt,
-    identity
+    identity,
+    expectedRequestId
   });
   writeExclusiveJson(resolve(required(args, '--output')), selected);
 }
@@ -395,6 +432,7 @@ function commandBuild(args) {
       response: {
         changeSetId: createResponse.Id,
         stackId: createResponse.StackId,
+        requestedAt: createCapture.capture.requestedAt,
         respondedAt: createCapture.capture.respondedAt,
         stdoutSha256: createCapture.capture.stdoutSha256,
         stderrSha256: createCapture.capture.stderrSha256
@@ -413,7 +451,7 @@ function commandBuild(args) {
   writeExclusiveJson(resolve(required(args, '--output')), proof);
 }
 
-function commandValidate(args) {
+function validateEvidence(args, now = new Date()) {
   const evidencePath = resolve(required(args, '--evidence'));
   const chainPath = resolve(required(args, '--chain'));
   const attemptDirectory = dirname(evidencePath);
@@ -426,10 +464,44 @@ function commandValidate(args) {
     expectedCommitSha: required(args, '--expected-commit-sha'),
     expectedIdentitySha: required(args, '--expected-identity-sha'),
     inputChainSha256: sha256(readFileSync(chainPath)),
-    now: new Date()
+    now
   });
+  return { evidence, evidencePath, chainPath, summary };
+}
+
+function commandValidate(args) {
+  const now = args.has('--now') ? required(args, '--now') : new Date();
+  const { summary } = validateEvidence(args, now);
   if (args.has('--summary-output')) writeExclusiveJson(resolve(required(args, '--summary-output')), summary);
   process.stdout.write('AWS proof: PASS\n');
+}
+
+function commandGuardExecute(args) {
+  requireCondition(required(args, '--phase') === 'execute', 'PHASE', 'El guard final solo admite execute.');
+  const requestedAt = required(args, '--requested-at');
+  requireCondition(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(requestedAt) && Number.isFinite(Date.parse(requestedAt)), 'EXECUTE_TIME', 'El inicio de execute debe ser UTC.');
+  const { evidence, evidencePath, chainPath, summary } = validateEvidence(args, requestedAt);
+  writeExclusiveJson(resolve(required(args, '--output')), {
+    requestedAt,
+    toctouObservedAt: evidence.snapshots.toctou.observedAt,
+    evidenceSha256: sha256(readFileSync(evidencePath)),
+    chainSha256: sha256(readFileSync(chainPath)),
+    checks: summary
+  });
+}
+
+function commandVerifyExecuteCapture(args) {
+  const guardPath = resolve(required(args, '--guard'));
+  const capturePath = resolve(required(args, '--capture'));
+  const evidencePath = resolve(required(args, '--evidence'));
+  requirePrivateFile(guardPath);
+  requirePrivateFile(capturePath);
+  requirePrivateFile(evidencePath);
+  const guard = readJson(guardPath, 'EXECUTE_GUARD');
+  const capture = readJson(capturePath, 'EXECUTE_CAPTURE');
+  requireCondition(guard.requestedAt === capture.requestedAt, 'EXECUTE_CORRELATION', 'El guard final no corresponde al inicio capturado de execute-change-set.');
+  requireCondition(guard.evidenceSha256 === sha256(readFileSync(evidencePath)), 'EXECUTE_CORRELATION', 'La evidencia validada por el guard final cambió.');
+  requireCondition(Date.parse(capture.requestedAt) <= Date.parse(capture.respondedAt), 'EXECUTE_CORRELATION', 'La captura de execute-change-set tiene un intervalo inválido.');
 }
 
 function commandReport(args) {
@@ -497,6 +569,7 @@ try {
     }
     case 'init-attempt': commandInit(args); break;
     case 'capture-record': commandCaptureRecord(args); break;
+    case 'normalize-identity': commandNormalizeIdentity(args); break;
     case 'create-request': commandCreateRequest(args); break;
     case 'select-cloudtrail': commandSelectCloudTrail(args); break;
     case 'seal': commandSeal(args); break;
@@ -506,6 +579,8 @@ try {
       break;
     case 'build': commandBuild(args); break;
     case 'validate': commandValidate(args); break;
+    case 'guard-execute': commandGuardExecute(args); break;
+    case 'verify-execute-capture': commandVerifyExecuteCapture(args); break;
     case 'report': commandReport(args); break;
     case 'pointer': commandPointer(args); break;
     case 'check-permissions': commandCheckPermissions(args); break;

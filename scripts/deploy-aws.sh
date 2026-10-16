@@ -166,15 +166,16 @@ write_once_from_command() {
   [[ "$(file_mode "$output")" == '600' ]] || fail 'No se pudo proteger un archivo de evidencia.'
 }
 
-capture_command() {
+capture_command_at() {
   local prefix="$1"
-  shift
+  local requested_at="$2"
+  shift 2
   local stdout_file="$ATTEMPT_DIR/$prefix.stdout"
   local stderr_file="$ATTEMPT_DIR/$prefix.stderr"
   local capture_file="$ATTEMPT_DIR/$prefix.capture.json"
-  local requested_at responded_at result
+  local responded_at result
+  [[ "$requested_at" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || fail 'El inicio capturado debe ser UTC.'
   [[ ! -e "$stdout_file" && ! -e "$stderr_file" && ! -e "$capture_file" ]] || fail 'La evidencia es write-once; no se sobrescribirá.'
-  requested_at="$(utc_now)"
   set -o noclobber
   if "$@" >"$stdout_file" 2>"$stderr_file"; then
     result=0
@@ -192,6 +193,12 @@ capture_command() {
     --stdout "$stdout_file" \
     --stderr "$stderr_file" >/dev/null
   CAPTURE_EXIT="$result"
+}
+
+capture_command() {
+  local prefix="$1"
+  shift
+  capture_command_at "$prefix" "$(utc_now)" "$@"
 }
 
 require_capture_success() {
@@ -236,7 +243,7 @@ collect_cloudtrail_event() {
   local event_name="$2"
   local output_name="$3"
   local attempt_file="$ATTEMPT_DIR/attempt.json"
-  local identity_file="$ATTEMPT_DIR/identity.stdout"
+  local identity_file="$ATTEMPT_DIR/identity.json"
   local start_time end_time suffix selection_result
   start_time="$(jq -er '.createdAt' "$attempt_file")"
 
@@ -248,17 +255,35 @@ collect_cloudtrail_event() {
       --lookup-attributes "AttributeKey=EventName,AttributeValue=$event_name" \
       --start-time "$start_time" --end-time "$end_time" --max-results 50 --output json
     if [[ "$CAPTURE_EXIT" == '0' ]]; then
-      if node "$VALIDATOR" select-cloudtrail \
-        --kind "$kind" \
-        --attempt "$attempt_file" \
-        --identity "$identity_file" \
-        --input "$ATTEMPT_DIR/cloudtrail-${kind}-${suffix}.stdout" \
-        --output "$ATTEMPT_DIR/$output_name" >/dev/null 2>/dev/null; then
-        return 0
+      if [[ "$kind" == 'absence' ]]; then
+        if node "$VALIDATOR" select-cloudtrail \
+          --kind "$kind" \
+          --attempt "$attempt_file" \
+          --identity "$identity_file" \
+          --attempt-dir "$ATTEMPT_DIR" \
+          --probe-prefix preflight-describe-stacks \
+          --input "$ATTEMPT_DIR/cloudtrail-${kind}-${suffix}.stdout" \
+          --output "$ATTEMPT_DIR/$output_name" >/dev/null 2>/dev/null; then
+          selection_result=0
+        else
+          selection_result=$?
+        fi
       else
-        selection_result=$?
-        [[ "$selection_result" != '2' ]] || fail 'CloudTrail devolvió evidencia ambigua; STOP.'
+        if node "$VALIDATOR" select-cloudtrail \
+          --kind "$kind" \
+          --attempt "$attempt_file" \
+          --identity "$identity_file" \
+          --input "$ATTEMPT_DIR/cloudtrail-${kind}-${suffix}.stdout" \
+          --output "$ATTEMPT_DIR/$output_name" >/dev/null 2>/dev/null; then
+          selection_result=0
+        else
+          selection_result=$?
+        fi
       fi
+      if [[ "$selection_result" == '0' ]]; then
+        return 0
+      fi
+      [[ "$selection_result" != '2' ]] || fail 'CloudTrail devolvió evidencia ambigua; STOP.'
     fi
     [[ "$index" == '30' ]] || sleep 10
   done
@@ -328,26 +353,30 @@ if [[ "$PHASE" == 'prepare' ]]; then
 
   capture_command identity "${AWS[@]}" sts get-caller-identity --output json
   require_capture_success 'No se pudo verificar la identidad activa.'
-  IDENTITY_HASH="$(node "$VALIDATOR" identity-hash --attempt "$ATTEMPT_DIR/attempt.json" --identity "$ATTEMPT_DIR/identity.stdout")"
+  node "$VALIDATOR" normalize-identity \
+    --attempt "$ATTEMPT_DIR/attempt.json" \
+    --identity "$ATTEMPT_DIR/identity.stdout" \
+    --output "$ATTEMPT_DIR/identity.json"
+  IDENTITY_HASH="$(node "$VALIDATOR" identity-hash --attempt "$ATTEMPT_DIR/attempt.json" --identity "$ATTEMPT_DIR/identity.json")"
   [[ "$IDENTITY_HASH" == "$CONFIRM_IDENTITY_SHA" ]] || fail 'La identidad activa no coincide con el hash aprobado; STOP.'
 
-  capture_command preflight-describe-stacks "${AWS[@]}" cloudformation describe-stacks \
+  capture_command preflight-describe-stacks "${AWS[@]}" --debug cloudformation describe-stacks \
     --stack-name "$TARGET_STACK" --output json
   node "$VALIDATOR" check-absence \
     --attempt-dir "$ATTEMPT_DIR" --prefix preflight-describe-stacks --operation DescribeStacks \
-    --attempt "$ATTEMPT_DIR/attempt.json" --identity "$ATTEMPT_DIR/identity.stdout" >/dev/null || \
-    fail 'El target existe o su ausencia es ambigua; STOP sin update ni nombre alternativo.'
+    --attempt "$ATTEMPT_DIR/attempt.json" --identity "$ATTEMPT_DIR/identity.json" >/dev/null || \
+    fail 'El target existe, su ausencia es ambigua o falta el request ID exacto; STOP sin update ni nombre alternativo.'
 
   capture_command preflight-list-change-sets "${AWS[@]}" cloudformation list-change-sets \
     --stack-name "$TARGET_STACK" --output json
   node "$VALIDATOR" check-absence \
     --attempt-dir "$ATTEMPT_DIR" --prefix preflight-list-change-sets --operation ListChangeSets \
-    --attempt "$ATTEMPT_DIR/attempt.json" --identity "$ATTEMPT_DIR/identity.stdout" >/dev/null || \
+    --attempt "$ATTEMPT_DIR/attempt.json" --identity "$ATTEMPT_DIR/identity.json" >/dev/null || \
     fail 'La segunda fuente no demuestra ausencia; STOP sin crear.'
 
   node "$VALIDATOR" create-request \
     --attempt "$ATTEMPT_DIR/attempt.json" \
-    --identity "$ATTEMPT_DIR/identity.stdout" \
+    --identity "$ATTEMPT_DIR/identity.json" \
     --output "$ATTEMPT_DIR/create-request.json"
   CHANGE_SET_NAME="$(jq -er '.changeSetName' "$ATTEMPT_DIR/attempt.json")"
   CLIENT_TOKEN="$(jq -er '.clientToken' "$ATTEMPT_DIR/attempt.json")"
@@ -485,9 +514,24 @@ node "$VALIDATOR" seal \
   --previous "$ATTEMPT_DIR/chain-input-execute.json"
 
 info 'Ejecutando exactamente el change set CREATE validado'
-capture_command execute-change-set "${AWS[@]}" cloudformation execute-change-set \
+EXECUTE_REQUESTED_AT="$(utc_now)"
+node "$VALIDATOR" guard-execute \
+  --phase execute \
+  --evidence "$ATTEMPT_DIR/proof-execute.json" \
+  --template "$TEMPLATE" \
+  --commit-template "$ATTEMPT_DIR/commit-template.yaml" \
+  --chain "$ATTEMPT_DIR/chain-input-execute.json" \
+  --expected-commit-sha "$CONFIRM_COMMIT_SHA" \
+  --expected-identity-sha "$CONFIRM_IDENTITY_SHA" \
+  --requested-at "$EXECUTE_REQUESTED_AT" \
+  --output "$ATTEMPT_DIR/execute-guard.json"
+capture_command_at execute-change-set "$EXECUTE_REQUESTED_AT" "${AWS[@]}" cloudformation execute-change-set \
   --change-set-name "$CHANGE_SET_ID" --stack-name "$STACK_ID" \
   --client-request-token "$CLIENT_TOKEN"
+node "$VALIDATOR" verify-execute-capture \
+  --guard "$ATTEMPT_DIR/execute-guard.json" \
+  --capture "$ATTEMPT_DIR/execute-change-set.capture.json" \
+  --evidence "$ATTEMPT_DIR/proof-execute.json"
 require_capture_success 'CloudFormation no aceptó la ejecución; no se hará cleanup automático.'
 capture_command wait-stack-create "${AWS[@]}" cloudformation wait stack-create-complete --stack-name "$STACK_ID"
 require_capture_success 'El stack no alcanzó CREATE_COMPLETE; recursos parciales permanecen para recuperación autorizada.'

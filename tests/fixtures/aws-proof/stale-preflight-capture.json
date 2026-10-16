@@ -1,0 +1,5 @@
+{
+  "name": "stale-preflight-capture",
+  "mutation": "stale-preflight-capture",
+  "expectedCode": "ABSENCE_ORDER"
+}

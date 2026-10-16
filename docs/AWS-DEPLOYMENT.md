@@ -58,13 +58,14 @@ Esta fase sí consulta la identidad activa en AWS cuando alguien la ejecuta en e
 Antes de cualquier API, el script inspecciona localmente el skeleton de AWS CLI v2 y exige soporte para `ClientToken` y `OnStackFailure`. Después:
 
 1. crea una sola vez el attempt ID, nombre de change set y client token, y los persiste antes del request;
-2. conserva los bytes exactos del template local y del blob del commit aprobado;
-3. captura dos probes independientes e inmediatamente anteriores: `DescribeStacks` y `ListChangeSets`;
+2. conserva los bytes exactos del template local y del blob del commit aprobado, y persiste la identidad normalizada `0600` antes de cualquier escritura de infraestructura;
+3. captura dos probes independientes e inmediatamente anteriores: `DescribeStacks` y `ListChangeSets`; el primero conserva su request ID de servicio exacto;
 4. emite literalmente `--change-set-type CREATE`, `--client-token` y `--on-stack-failure DO_NOTHING`;
-5. conserva request, respuesta, stdout, stderr, timestamps UTC, identidad, región, profile, hashes e identificadores de correlación;
-6. exige eventos CloudTrail únicos para el probe `DescribeStacks` y para `CreateChangeSet`;
-7. recupera el template del change set y exige igualdad byte por byte con el archivo enviado y el commit;
-8. valida un placeholder `REVIEW_IN_PROGRESS` sin recursos, outputs ni template aplicado, un único change set disponible y exactamente cinco acciones `Add` allowlisted.
+5. conserva request, respuesta, stdout, stderr, timestamps UTC —incluido el inicio real de la captura `CreateChangeSet`—, identidad, región, profile, hashes e identificadores de correlación;
+6. exige que CloudTrail devuelva eventos únicos: `DescribeStacks` debe coincidir con el request ID exacto del probe, y `CreateChangeSet` con nombre, token y respuesta;
+7. mide la ventana de 60 segundos desde cada probe hasta el inicio real capturado de `CreateChangeSet`, no desde un timestamp declarativo;
+8. recupera el template del change set y exige igualdad byte por byte con el archivo enviado y el commit;
+9. valida un placeholder `REVIEW_IN_PROGRESS` sin recursos, outputs ni template aplicado, un único change set disponible y exactamente cinco acciones `Add` allowlisted.
 
 `DO_NOTHING` deja el stack y cualquier recurso parcial disponible para diagnóstico si la creación falla. No se combina con una opción de rollback incompatible. Esto evita una eliminación automática, pero puede conservar recursos facturables y no autoriza recuperarlos o borrarlos.
 
@@ -81,7 +82,7 @@ Antes de cualquier API, el script inspecciona localmente el skeleton de AWS CLI 
   --confirm-identity-sha <APPROVED_IDENTITY_SHA256>
 ```
 
-Inmediatamente antes de `execute-change-set`, el script vuelve a comprobar identidad, commit, template remoto, placeholder vacío, único change set, parámetros, tags, modo `STANDARD`, `OnStackFailure`, ausencia de capabilities/import/nested stacks y las cinco acciones. El snapshot TOCTOU debe tener como máximo 300 segundos. Cualquier campo ausente, timestamp vencido o diferencia produce STOP y conserva todo.
+Antes de `execute-change-set`, el script vuelve a comprobar identidad, commit, template remoto, placeholder vacío, único change set, parámetros, tags, modo `STANDARD`, `OnStackFailure`, ausencia de capabilities/import/nested stacks y las cinco acciones. Tras generar el reporte y sellar la evidencia, repite la validación completa inmediatamente antes de la llamada y liga ese segundo guard al mismo timestamp UTC guardado como inicio de `execute-change-set`. El snapshot TOCTOU debe tener como máximo 300 segundos en ese instante; una demora posterior al primer PASS también produce STOP. Cualquier campo ausente, timestamp vencido o diferencia conserva todo.
 
 Tras una creación correcta, verifica stack policy, termination protection, S3 privado, cifrado, versionado, OAC, métodos, HTTPS y cabeceras antes de subir contenido público. También exige rechazo del acceso S3 anónimo directo y valida la publicación anónima al final.
 
