@@ -74,8 +74,10 @@ test('genera destinos desde la URL actual y separa compartir de copiar', () => {
   assert.match(pwa, /function abrirCompartir\(\)[\s\S]*?prepararOpcionesCompartir\(\)[\s\S]*?showModal\(\)/);
 
   assert.match(pwa, /botonMasApps\.addEventListener\('click',[\s\S]*?navigator\.share\(\{[\s\S]*?url: window\.location\.href/);
-  assert.match(pwa, /typeof navigator\.share !== 'function'[\s\S]*?botonMasApps\.disabled = true/);
-  assert.match(pwa, /compartirNativoDisponible[\s\S]*?avisoMasApps\.hidden = compartirNativoDisponible/);
+  assert.match(pwa, /function actualizarDisponibilidadMasApps\(disponible\)[\s\S]*?botonMasApps\.disabled = !disponible[\s\S]*?avisoMasApps\.hidden = disponible/);
+  assert.match(pwa, /if \(disponible\) \{[\s\S]*?botonMasApps\.removeAttribute\('aria-describedby'\)[\s\S]*?\} else \{[\s\S]*?botonMasApps\.setAttribute\('aria-describedby', 'mas-apps-no-disponible'\)/);
+  assert.match(pwa, /compartirNativoDisponible[\s\S]*?actualizarDisponibilidadMasApps\(compartirNativoDisponible\)/);
+  assert.match(pwa, /typeof navigator\.share !== 'function'[\s\S]*?actualizarDisponibilidadMasApps\(false\)/);
   assert.match(pwa, /error\?\.name === 'AbortError'[\s\S]*?anunciarCompartir\(''\)/);
 
   assert.equal(occurrences(pwa, /\bcopiarEnlace\b/g), 2);
@@ -94,6 +96,7 @@ test('mantiene accesibilidad, diálogos aislados y presentación adaptable', () 
   assert.match(pwa, /dialogoCompartir\.addEventListener\('close',[\s\S]*?focoAntesDeCompartir\.focus/);
   assert.match(pwa, /dialogoAyuda\.addEventListener\('close',[\s\S]*?focoAntesDeAyuda\.focus/);
   assert.match(pwa, /evento\.target === dialogoCompartir/);
+  assert.match(html, /id="mas-apps"[^>]+aria-describedby="mas-apps-no-disponible"/);
   assert.match(html, /id="mas-apps-no-disponible"[^>]+hidden/);
 
   assert.match(styles, /\.opcion-compartir[\s\S]*?min-height: 96px/);

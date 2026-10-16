@@ -84,6 +84,16 @@ function construirUrlCompartir(base, parametros) {
   return destino.href;
 }
 
+function actualizarDisponibilidadMasApps(disponible) {
+  botonMasApps.disabled = !disponible;
+  avisoMasApps.hidden = disponible;
+  if (disponible) {
+    botonMasApps.removeAttribute('aria-describedby');
+  } else {
+    botonMasApps.setAttribute('aria-describedby', 'mas-apps-no-disponible');
+  }
+}
+
 function prepararOpcionesCompartir() {
   const enlace = window.location.href;
   enlaceWhatsApp.href = construirUrlCompartir('https://wa.me/', {
@@ -106,8 +116,7 @@ function prepararOpcionesCompartir() {
   }).toString()}`;
 
   const compartirNativoDisponible = typeof navigator.share === 'function';
-  botonMasApps.disabled = !compartirNativoDisponible;
-  avisoMasApps.hidden = compartirNativoDisponible;
+  actualizarDisponibilidadMasApps(compartirNativoDisponible);
 }
 
 function ocultarCopiaManual() {
@@ -222,8 +231,7 @@ for (const enlaceDestino of [enlaceWhatsApp, enlaceTelegram, enlaceFacebook, enl
 botonCopiar.addEventListener('click', copiarEnlace);
 botonMasApps.addEventListener('click', () => {
   if (typeof navigator.share !== 'function') {
-    botonMasApps.disabled = true;
-    avisoMasApps.hidden = false;
+    actualizarDisponibilidadMasApps(false);
     anunciarCompartir('El menú de aplicaciones no está disponible en este navegador.');
     return;
   }
