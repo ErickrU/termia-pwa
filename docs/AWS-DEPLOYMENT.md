@@ -61,11 +61,11 @@ Antes de cualquier API, el script inspecciona localmente el skeleton de AWS CLI 
 2. conserva los bytes exactos del template local y del blob del commit aprobado, y persiste la identidad normalizada `0600` antes de cualquier escritura de infraestructura;
 3. captura dos probes independientes e inmediatamente anteriores: `DescribeStacks` y `ListChangeSets`; el primero conserva su request ID de servicio exacto;
 4. emite literalmente `--change-set-type CREATE`, `--client-token` y `--on-stack-failure DO_NOTHING`;
-5. conserva request, respuesta, stdout, stderr, timestamps UTC —incluido el inicio real de la captura `CreateChangeSet`—, identidad, región, profile, hashes e identificadores de correlación;
-6. exige que CloudTrail devuelva eventos únicos: `DescribeStacks` debe coincidir con el request ID exacto del probe, y `CreateChangeSet` con nombre, token y respuesta;
+5. conserva el contrato completo del request: descripción ligada al SHA exacto, parámetros/tags, opciones vacías, respuesta, stdout, stderr, timestamps UTC —incluido el inicio real de la captura `CreateChangeSet`—, identidad, región, profile, hashes e identificadores de correlación;
+6. exige que CloudTrail devuelva eventos únicos: `DescribeStacks` debe coincidir con el request ID exacto del probe, y `CreateChangeSet` con nombre, token, descripción, alcance vacío y respuesta;
 7. mide la ventana de 60 segundos desde cada probe hasta el inicio real capturado de `CreateChangeSet`, no desde un timestamp declarativo;
 8. recupera el template del change set y exige igualdad byte por byte con el archivo enviado y el commit;
-9. valida un placeholder `REVIEW_IN_PROGRESS` sin recursos, outputs ni template aplicado, un único change set disponible y exactamente cinco acciones `Add` allowlisted.
+9. valida un placeholder `REVIEW_IN_PROGRESS` sin recursos, outputs ni template aplicado, un único change set disponible, sin role/notificaciones/imports/rollback triggers y exactamente cinco acciones `Add` allowlisted.
 
 `DO_NOTHING` deja el stack y cualquier recurso parcial disponible para diagnóstico si la creación falla. No se combina con una opción de rollback incompatible. Esto evita una eliminación automática, pero puede conservar recursos facturables y no autoriza recuperarlos o borrarlos.
 
@@ -82,7 +82,7 @@ Antes de cualquier API, el script inspecciona localmente el skeleton de AWS CLI 
   --confirm-identity-sha <APPROVED_IDENTITY_SHA256>
 ```
 
-Antes de `execute-change-set`, el script vuelve a comprobar identidad, commit, template remoto, placeholder vacío, único change set, parámetros, tags, modo `STANDARD`, `OnStackFailure`, ausencia de capabilities/import/nested stacks y las cinco acciones. Tras generar el reporte y sellar la evidencia, repite la validación completa inmediatamente antes de la llamada y liga ese segundo guard al mismo timestamp UTC guardado como inicio de `execute-change-set`. El snapshot TOCTOU debe tener como máximo 300 segundos en ese instante; una demora posterior al primer PASS también produce STOP. Cualquier campo ausente, timestamp vencido o diferencia conserva todo.
+Antes de `execute-change-set`, el script vuelve a comprobar identidad, commit, template remoto, placeholder vacío, único change set, descripción, parámetros, tags, modo `STANDARD`, `OnStackFailure`, ausencia de role/notificaciones/capabilities/imports/nested stacks/rollback triggers y las cinco acciones. Tras generar el reporte y sellar la evidencia, repite la validación completa inmediatamente antes de la llamada y liga ese segundo guard al mismo timestamp UTC guardado como inicio de `execute-change-set`. Todas las observaciones del snapshot TOCTOU —desde la primera hasta la última— deben tener como máximo 300 segundos en ese instante; una demora posterior al primer PASS también produce STOP. Cualquier campo ausente, timestamp vencido o diferencia conserva todo.
 
 Tras una creación correcta, verifica stack policy, termination protection, S3 privado, cifrado, versionado, OAC, métodos, HTTPS y cabeceras antes de subir contenido público. También exige rechazo del acceso S3 anónimo directo y valida la publicación anónima al final.
 

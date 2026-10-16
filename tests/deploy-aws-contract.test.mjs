@@ -82,7 +82,9 @@ test('create-change-set usa CREATE, token interno y DO_NOTHING sin DisableRollba
   assert.match(block, /--client-token "\$CLIENT_TOKEN"/);
   assert.match(block, /--on-stack-failure DO_NOTHING/);
   assert.match(block, /--change-set-name "\$CHANGE_SET_NAME"/);
+  assert.match(block, /--description "Termia template \$TEMPLATE_SHA"/);
   assert.doesNotMatch(block, /--disable-rollback/i);
+  assert.doesNotMatch(block, /--(?:capabilities|include-nested-stacks|import-existing-resources|notification-arns|resource-types|resources-to-import|role-arn|rollback-configuration|template-url)\b/i);
 });
 
 test('normaliza la identidad y captura el request ID antes de crear', () => {
@@ -265,6 +267,7 @@ test('build y validate completan un intento sintético con identidad persistida'
       changeSetName: attempt.changeSetName,
       changeSetType: 'CREATE',
       clientToken: attempt.clientToken,
+      description: `Termia template ${sha256(templateBytes)}`,
       onStackFailure: 'DO_NOTHING',
       disableRollback: false,
       includeNestedStacks: false,
@@ -272,6 +275,10 @@ test('build y validate completan un intento sintético con identidad persistida'
       capabilities: [],
       notificationArns: [],
       roleArn: null,
+      resourceTypes: [],
+      resourcesToImport: [],
+      rollbackConfiguration: null,
+      templateUrl: null,
       templateSha256: sha256(templateBytes),
       parameters,
       tags
@@ -310,6 +317,7 @@ test('build y validate completan un intento sintético con identidad persistida'
         changeSetName: attempt.changeSetName,
         changeSetType: 'CREATE',
         clientToken: attempt.clientToken,
+        description: `Termia template ${sha256(templateBytes)}`,
         onStackFailure: 'DO_NOTHING',
         parameters,
         tags
@@ -334,6 +342,7 @@ test('build y validate completan un intento sintético con identidad persistida'
         ChangeSetId: changeSetId,
         StackName: CONTRACT.stackName,
         StackId: stackId,
+        Description: `Termia template ${sha256(templateBytes)}`,
         Status: 'CREATE_COMPLETE',
         ExecutionStatus: 'AVAILABLE',
         OnStackFailure: 'DO_NOTHING',

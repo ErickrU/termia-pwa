@@ -209,6 +209,38 @@ function requireExactCollection(actual, expected, code, label) {
   requireCondition(canonicalJson(sortedCanonical(actual)) === canonicalJson(sortedCanonical(expected)), code, `${label} no coincide con el contrato exacto.`);
 }
 
+function expectedDescription(templateSha) {
+  return `Termia template ${templateSha}`;
+}
+
+function requireOptionalEmptyArray(value, code, label) {
+  requireCondition(value === undefined || value === null || (Array.isArray(value) && value.length === 0), code, `${label} debe estar ausente o vacío.`);
+}
+
+function requireOptionalEmptyObject(value, code, label) {
+  requireCondition(value === undefined || value === null || (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0), code, `${label} debe estar ausente o vacío.`);
+}
+
+function requireOptionalAbsentString(value, code, label) {
+  requireCondition(value === undefined || value === null || value === '', code, `${label} debe estar ausente.`);
+}
+
+function requireOptionalFalse(value, code, label) {
+  requireCondition(value === undefined || value === null || value === false, code, `${label} debe estar ausente o ser false.`);
+}
+
+function requireEmptyRollbackConfiguration(value, code, label) {
+  if (value === undefined || value === null) return;
+  const configuration = requireObject(value, code, label);
+  const allowedKeys = new Set(['RollbackTriggers', 'rollbackTriggers', 'MonitoringTimeInMinutes', 'monitoringTimeInMinutes']);
+  requireCondition(Object.keys(configuration).every((key) => allowedKeys.has(key)), code, `${label} contiene campos inesperados.`);
+  requireCondition(!(hasOwn(configuration, 'RollbackTriggers') && hasOwn(configuration, 'rollbackTriggers')), code, `${label} duplica rollback triggers.`);
+  requireCondition(!(hasOwn(configuration, 'MonitoringTimeInMinutes') && hasOwn(configuration, 'monitoringTimeInMinutes')), code, `${label} duplica monitoring time.`);
+  const triggers = configuration.RollbackTriggers ?? configuration.rollbackTriggers ?? [];
+  const monitoring = configuration.MonitoringTimeInMinutes ?? configuration.monitoringTimeInMinutes ?? 0;
+  requireCondition(Array.isArray(triggers) && triggers.length === 0 && monitoring === 0, code, `${label} debe estar vacío.`);
+}
+
 function validateTemplateEvidence(template, templateBytes, commitTemplateBytes) {
   const value = requireObject(template, 'TEMPLATE_EVIDENCE', 'La evidencia de plantilla');
   const local = strictBase64(value.localBodyBase64, 'TEMPLATE_EVIDENCE', 'localBodyBase64');
@@ -275,11 +307,15 @@ function validateRequest(request, context, deploymentId, templateSha, clientToke
   requireCondition(value.stackName === CONTRACT.stackName && value.changeSetName === changeSetName, 'CREATE_REQUEST', 'Stack o change set discordante.');
   requireCondition(value.changeSetType === 'CREATE', 'CREATE_TYPE', 'El request debe fijar CREATE.');
   requireCondition(value.clientToken === clientToken && TOKEN_PATTERN.test(value.clientToken), 'CLIENT_TOKEN', 'El client token debe ser interno, no vacío y estable.');
+  requireCondition(value.description === expectedDescription(templateSha), 'CREATE_REQUEST', 'La descripción no está ligada al hash exacto de la plantilla.');
   requireCondition(value.onStackFailure === 'DO_NOTHING', 'ON_STACK_FAILURE', 'OnStackFailure debe ser DO_NOTHING.');
   requireCondition(value.disableRollback === false, 'DISABLE_ROLLBACK', 'DisableRollback debe permanecer falso y no combinarse con OnStackFailure.');
   requireCondition(value.includeNestedStacks === false && value.importExistingResources === false, 'CREATE_SCOPE', 'Nested stacks o imports no están permitidos.');
   requireCondition(Array.isArray(value.capabilities) && value.capabilities.length === 0, 'CAPABILITIES', 'No se permiten capabilities.');
   requireCondition(Array.isArray(value.notificationArns) && value.notificationArns.length === 0 && value.roleArn === null, 'CREATE_SCOPE', 'No se permiten roles ni notificaciones.');
+  requireCondition(Array.isArray(value.resourceTypes) && value.resourceTypes.length === 0, 'CREATE_SCOPE', 'No se permite restringir o ampliar el request mediante resource types.');
+  requireCondition(Array.isArray(value.resourcesToImport) && value.resourcesToImport.length === 0, 'CREATE_SCOPE', 'No se permiten recursos para importar.');
+  requireCondition(value.rollbackConfiguration === null && value.templateUrl === null, 'CREATE_SCOPE', 'No se permiten rollback triggers ni template URL.');
   requireCondition(value.templateSha256 === templateSha, 'TEMPLATE_HASH', 'El request registra otro hash de plantilla.');
   requireCondition(value.profile === context.profile && value.region === context.region, 'CREATE_REQUEST', 'Profile o región del request no coinciden.');
   requireExactCollection(normalizedParameters(value.parameters), expectedParameters(deploymentId), 'PARAMETERS', 'Los parámetros');
@@ -313,8 +349,26 @@ function validateCreate(create, context, identity, reviewedRequestTime, deployme
   requireCondition(eventRequest.stackName === CONTRACT.stackName && eventRequest.changeSetName === changeSetName, 'CREATE_CLOUDTRAIL', 'CloudTrail registra otros nombres.');
   requireCondition(eventRequest.clientToken === clientToken, 'CLIENT_TOKEN', 'CloudTrail no conserva el client token exacto.');
   requireCondition(eventRequest.changeSetType === 'CREATE', 'CREATE_TYPE', 'CloudTrail no registra CREATE.');
+  requireCondition(eventRequest.description === expectedDescription(templateSha), 'CREATE_CLOUDTRAIL', 'CloudTrail no registra la descripción revisada.');
   requireCondition(eventRequest.onStackFailure === 'DO_NOTHING', 'ON_STACK_FAILURE', 'CloudTrail no registra DO_NOTHING.');
-  requireCondition(eventRequest.disableRollback === undefined || eventRequest.disableRollback === false, 'DISABLE_ROLLBACK', 'CloudTrail registra DisableRollback activo.');
+  requireOptionalFalse(eventRequest.disableRollback, 'DISABLE_ROLLBACK', 'CloudTrail DisableRollback');
+  requireOptionalFalse(eventRequest.includeNestedStacks, 'CREATE_SCOPE', 'CloudTrail IncludeNestedStacks');
+  requireOptionalFalse(eventRequest.importExistingResources, 'CREATE_SCOPE', 'CloudTrail ImportExistingResources');
+  requireOptionalEmptyArray(eventRequest.capabilities, 'CAPABILITIES', 'CloudTrail capabilities');
+  requireOptionalEmptyArray(eventRequest.notificationARNs, 'CREATE_SCOPE', 'CloudTrail notificationARNs');
+  requireOptionalEmptyArray(eventRequest.notificationArns, 'CREATE_SCOPE', 'CloudTrail notificationArns');
+  requireOptionalEmptyArray(eventRequest.resourceTypes, 'CREATE_SCOPE', 'CloudTrail resource types');
+  requireOptionalEmptyArray(eventRequest.resourcesToImport, 'CREATE_SCOPE', 'CloudTrail resources to import');
+  requireOptionalAbsentString(eventRequest.roleARN, 'CREATE_SCOPE', 'CloudTrail roleARN');
+  requireOptionalAbsentString(eventRequest.roleArn, 'CREATE_SCOPE', 'CloudTrail roleArn');
+  requireOptionalAbsentString(eventRequest.templateURL, 'CREATE_SCOPE', 'CloudTrail templateURL');
+  requireOptionalAbsentString(eventRequest.templateUrl, 'CREATE_SCOPE', 'CloudTrail templateUrl');
+  requireEmptyRollbackConfiguration(eventRequest.rollbackConfiguration, 'CREATE_SCOPE', 'CloudTrail rollback configuration');
+  for (const body of [eventRequest.templateBody, eventRequest.TemplateBody]) {
+    if (body !== undefined && body !== null) {
+      requireCondition(typeof body === 'string' && sha256(body) === templateSha, 'TEMPLATE_HASH', 'CloudTrail registra otro cuerpo de plantilla.');
+    }
+  }
   requireExactCollection(normalizedParameters(eventRequest.parameters), expectedParameters(deploymentId), 'PARAMETERS', 'Los parámetros CloudTrail');
   requireExactCollection(normalizedTags(eventRequest.tags), expectedTags(deploymentId), 'TAGS', 'Los tags CloudTrail');
   const eventResponse = requireObject(trail.responseElements, 'CREATE_CLOUDTRAIL', 'responseElements');
@@ -327,10 +381,13 @@ function validateChanges(changes) {
   requireCondition(Array.isArray(changes) && changes.length === 5, 'CHANGES_COUNT', 'Deben existir exactamente cinco cambios.');
   const observed = new Map();
   for (const entry of changes) {
+    requireCondition(entry?.Type === 'Resource', 'CHANGE_ACTION', 'Cada cambio debe ser de tipo Resource.');
     const change = requireObject(entry?.ResourceChange, 'CHANGE_ACTION', 'ResourceChange');
     requireCondition(change.Action === 'Add', 'CHANGE_ACTION', 'Todos los cambios deben ser Add.');
     requireCondition(CONTRACT.logicalResources[change.LogicalResourceId] === change.ResourceType, 'CHANGE_ALLOWLIST', 'El recurso no pertenece a la allowlist exacta.');
     requireCondition(!observed.has(change.LogicalResourceId), 'CHANGE_ALLOWLIST', 'No se permiten recursos duplicados.');
+    requireCondition(change.PhysicalResourceId === undefined || change.PhysicalResourceId === null || change.PhysicalResourceId === '', 'CHANGE_SCOPE', 'Un Add no puede referenciar un recurso físico existente.');
+    requireOptionalEmptyObject(change.ResourceIdentifier, 'CHANGE_SCOPE', 'ResourceIdentifier');
     requireCondition(change.Replacement === undefined || change.Replacement === null || change.Replacement === 'False', 'CHANGE_REPLACEMENT', 'No se permite replacement.');
     requireCondition(change.PolicyAction === undefined || change.PolicyAction === null, 'CHANGE_SCOPE', 'No se permiten acciones de policy adicionales.');
     requireCondition(change.ModuleInfo === undefined || change.ModuleInfo === null, 'CHANGE_SCOPE', 'No se permiten módulos.');
@@ -356,11 +413,17 @@ function validateSnapshot(snapshot, label, context, identity, identityHash, depl
   }
   requireCondition(changeSet.StackName === CONTRACT.stackName && changeSet.StackId === createResult.stackId, 'CHANGE_SET', 'DescribeChangeSet pertenece a otro stack.');
   requireCondition(changeSet.ChangeSetName === context.changeSetName && changeSet.ChangeSetId === createResult.changeSetId, 'CHANGE_SET', 'DescribeChangeSet pertenece a otro cambio.');
+  requireCondition(changeSet.Description === expectedDescription(sha256(templateBytes)), 'CHANGE_SET', 'DescribeChangeSet no conserva la descripción ligada a la plantilla.');
   requireCondition(changeSet.OnStackFailure === 'DO_NOTHING', 'ON_STACK_FAILURE', 'DescribeChangeSet debe registrar DO_NOTHING.');
   const deploymentMode = changeSet.DeploymentMode ?? changeSet.DeploymentConfig?.Mode;
   requireCondition(deploymentMode === 'STANDARD', 'DEPLOYMENT_MODE', 'El modo debe ser STANDARD.');
   requireCondition(changeSet.IncludeNestedStacks === false && changeSet.ImportExistingResources === false, 'CHANGE_SCOPE', 'No se permiten nested stacks ni imports.');
   requireCondition(Array.isArray(changeSet.Capabilities) && changeSet.Capabilities.length === 0, 'CAPABILITIES', 'DescribeChangeSet contiene capabilities.');
+  requireOptionalEmptyArray(changeSet.NotificationARNs, 'CHANGE_SCOPE', 'DescribeChangeSet NotificationARNs');
+  requireOptionalEmptyArray(changeSet.ResourceTypes, 'CHANGE_SCOPE', 'DescribeChangeSet ResourceTypes');
+  requireOptionalEmptyArray(changeSet.ResourcesToImport, 'CHANGE_SCOPE', 'DescribeChangeSet ResourcesToImport');
+  requireOptionalAbsentString(changeSet.RoleARN, 'CHANGE_SCOPE', 'DescribeChangeSet RoleARN');
+  requireEmptyRollbackConfiguration(changeSet.RollbackConfiguration, 'CHANGE_SCOPE', 'DescribeChangeSet RollbackConfiguration');
   requireExactCollection(normalizedParameters(changeSet.Parameters), expectedParameters(deploymentId), 'PARAMETERS', 'Los parámetros descritos');
   requireExactCollection(normalizedTags(changeSet.Tags), expectedTags(deploymentId), 'TAGS', 'Los tags descritos');
   validateChanges(changeSet.Changes);
@@ -433,17 +496,19 @@ export function validateAwsProof(evidence, options) {
   const prepare = validateSnapshot(value.snapshots?.prepare, 'prepare-review', context, identity, context.identitySha256, expectedDeploymentId, templateBytes, create);
   requireCondition(prepare.startedAt >= create.respondedAt, 'SNAPSHOT_TIME', 'El snapshot prepare precede a la creación.');
 
+  let freshnessStartedAt = prepare.startedAt;
   let latest = prepare.observedAt;
   if (phase === 'execute') {
     requireCondition(hasOwn(value.snapshots, 'toctou'), 'TOCTOU_REQUIRED', 'Falta el snapshot TOCTOU inmediatamente anterior a execute.');
     const toctou = validateSnapshot(value.snapshots.toctou, 'before-execute', context, identity, context.identitySha256, expectedDeploymentId, templateBytes, create);
     requireCondition(toctou.startedAt >= prepare.observedAt, 'TOCTOU_ORDER', 'El snapshot TOCTOU precede al snapshot revisado.');
+    freshnessStartedAt = toctou.startedAt;
     latest = toctou.observedAt;
   }
 
   const now = options.now instanceof Date ? options.now.getTime() : Date.parse(options.now ?? new Date());
   requireCondition(Number.isFinite(now) && latest <= now + 5_000, 'TIMESTAMP_FUTURE', 'La evidencia tiene timestamps futuros.');
-  requireCondition(now - latest <= CONTRACT.maxFreshnessMs, 'TIMESTAMP_STALE', 'El snapshot final supera 300 segundos.');
+  requireCondition(now - freshnessStartedAt <= CONTRACT.maxFreshnessMs, 'TIMESTAMP_STALE', 'La observación más antigua del snapshot final supera 300 segundos.');
 
   return {
     fixedTarget: true,

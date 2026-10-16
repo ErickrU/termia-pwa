@@ -302,6 +302,7 @@ function commandCreateRequest(args) {
     changeSetName: attempt.changeSetName,
     changeSetType: 'CREATE',
     clientToken: attempt.clientToken,
+    description: `Termia template ${attempt.templateSha256}`,
     onStackFailure: 'DO_NOTHING',
     disableRollback: false,
     includeNestedStacks: false,
@@ -309,6 +310,10 @@ function commandCreateRequest(args) {
     capabilities: [],
     notificationArns: [],
     roleArn: null,
+    resourceTypes: [],
+    resourcesToImport: [],
+    rollbackConfiguration: null,
+    templateUrl: null,
     templateSha256: attempt.templateSha256,
     parameters: [
       { ParameterKey: 'ProjectSlug', ParameterValue: CONTRACT.project },

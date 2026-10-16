@@ -220,6 +220,7 @@ function validProof() {
         changeSetName,
         changeSetType: 'CREATE',
         clientToken,
+        description: `Termia template ${sha256(templateBytes)}`,
         onStackFailure: 'DO_NOTHING',
         disableRollback: false,
         includeNestedStacks: false,
@@ -227,6 +228,10 @@ function validProof() {
         capabilities: [],
         notificationArns: [],
         roleArn: null,
+        resourceTypes: [],
+        resourcesToImport: [],
+        rollbackConfiguration: null,
+        templateUrl: null,
         templateSha256: sha256(templateBytes),
         parameters: parameters(),
         tags: tags()
@@ -253,6 +258,7 @@ function validProof() {
           changeSetName,
           changeSetType: 'CREATE',
           clientToken,
+          description: `Termia template ${sha256(templateBytes)}`,
           onStackFailure: 'DO_NOTHING',
           parameters: parameters(),
           tags: tags()
@@ -362,6 +368,38 @@ test('el guard final rechaza una demora posterior al primer PASS', () => {
   assert.throws(
     () => validateAwsProof(proof, validationOptions('2026-10-16T12:06:06Z')),
     (error) => error?.code === 'TIMESTAMP_STALE'
+  );
+});
+
+test('la frescura TOCTOU cubre desde la primera observación del snapshot', () => {
+  const proof = validProof();
+  proof.snapshots.toctou = snapshot('before-execute', '2026-10-16T12:00:26Z', '2026-10-16T12:05:20Z');
+  assert.throws(
+    () => validateAwsProof(proof, validationOptions('2026-10-16T12:05:30Z')),
+    (error) => error?.code === 'TIMESTAMP_STALE'
+  );
+});
+
+test('correlaciona la descripción y rechaza opciones de request no revisadas', () => {
+  const wrongDescription = validProof();
+  wrongDescription.create.request.description = 'Termia template distinto';
+  assert.throws(
+    () => validateAwsProof(wrongDescription, validationOptions()),
+    (error) => error?.code === 'CREATE_REQUEST'
+  );
+
+  const cloudTrailRole = validProof();
+  cloudTrailRole.create.cloudTrailCreateChangeSet.requestParameters.roleARN = 'fixture-role';
+  assert.throws(
+    () => validateAwsProof(cloudTrailRole, validationOptions()),
+    (error) => error?.code === 'CREATE_SCOPE'
+  );
+
+  const describedNotification = validProof();
+  describedNotification.snapshots.prepare.describeChangeSet.NotificationARNs = ['fixture-notification'];
+  assert.throws(
+    () => validateAwsProof(describedNotification, validationOptions()),
+    (error) => error?.code === 'CHANGE_SCOPE'
   );
 });
 

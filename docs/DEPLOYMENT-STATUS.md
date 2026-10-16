@@ -18,13 +18,13 @@ Un intento fallido queda intacto y bloquea reintentos automáticos. `DO_NOTHING`
 - template ASCII con LF e igualdad byte por byte con `GetTemplate`;
 - identidad, profile y región iguales a sus hashes aprobados;
 - dos fuentes de ausencia cuyo fin queda a menos de 60 segundos del inicio capturado de `CreateChangeSet`, con el request ID exacto de `DescribeStacks` corroborado por CloudTrail;
-- request `CREATE` revisado y ligado a la captura real, con nombre/token internos y `OnStackFailure=DO_NOTHING`;
-- respuesta y evento `CreateChangeSet` correlacionados;
+- request `CREATE` revisado y ligado a la captura real, con descripción ligada al template, nombre/token internos, `OnStackFailure=DO_NOTHING` y todas las opciones fuera de alcance vacías;
+- respuesta y evento `CreateChangeSet` correlacionados por identidad, nombre, token, descripción e identificadores;
 - placeholder `REVIEW_IN_PROGRESS` sin recursos, outputs ni template aplicado;
-- un único change set `CREATE_COMPLETE/AVAILABLE`;
+- un único change set `CREATE_COMPLETE/AVAILABLE`, sin role, notificaciones, imports ni rollback triggers;
 - parámetros, tags, modo `STANDARD` y capabilities exactos;
 - exactamente cinco acciones `Add` allowlisted;
-- snapshot TOCTOU completo de antigüedad máxima de 300 segundos, revalidado contra el timestamp capturado inmediatamente antes de `execute-change-set`.
+- snapshot TOCTOU completo cuyas observaciones, desde la primera hasta la última, tienen antigüedad máxima de 300 segundos y se revalidan contra el timestamp capturado inmediatamente antes de `execute-change-set`.
 
 `ChangeSetType` no forma parte obligatoria de la respuesta `DescribeChangeSet`; su ausencia o valor nulo no invalida la prueba. Un valor contradictorio sí la invalida.
 
