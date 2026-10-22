@@ -33,14 +33,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p _site/css _site/js _site/iconos
+          mkdir -p _site/css _site/js _site/iconos _site/widgets
           cp index.html offline.html manifest.webmanifest sw.js _site/
           cp css/estilos.css css/offline.css _site/css/
-          cp js/app.js js/conversion.js js/pwa.js _site/js/
+          cp js/app.js js/conversion.js js/pwa.js js/widgets.js _site/js/
           cp iconos/favicon.svg iconos/icono-192.png iconos/icono-512.png \
             iconos/icono-maskable-512.png iconos/apple-touch-icon.png _site/iconos/
+          cp widgets/conversion-rapida-plantilla.json widgets/conversion-rapida-datos.json \
+            widgets/conversion-rapida-captura.png _site/widgets/
           test -z "$(find _site -type l -print -quit)"
-          test "$(find _site -type f | wc -l | tr -d ' ')" = "14"
+          test "$(find _site -type f | wc -l | tr -d ' ')" = "18"
       - name: Subir artefacto de Pages
         uses: actions/upload-pages-artifact@v3.0.1
         with:

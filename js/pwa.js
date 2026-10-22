@@ -1,3 +1,5 @@
+import { crearPanelWidgets } from './widgets.js';
+
 const raiz = document.documentElement;
 const metaTema = document.querySelector('meta[name="theme-color"]');
 const botonInstalar = document.querySelector('#control-instalar');
@@ -5,6 +7,7 @@ const botonCompartir = document.querySelector('#control-compartir');
 const botonTema = document.querySelector('#control-tema');
 const botonRestablecer = document.querySelector('#control-restablecer');
 const botonAyuda = document.querySelector('#control-ayuda');
+const botonWidgets = document.querySelector('#control-widgets');
 const dialogoAyuda = document.querySelector('#dialogo-ayuda');
 const cerrarAyuda = document.querySelector('#cerrar-ayuda');
 const dialogoCompartir = document.querySelector('#dialogo-compartir');
@@ -286,6 +289,14 @@ dialogoAyuda.addEventListener('click', (evento) => {
 });
 dialogoAyuda.addEventListener('close', () => {
   if (focoAntesDeAyuda?.isConnected) focoAntesDeAyuda.focus();
+});
+
+// Panel de widgets: simulación del Widgets Board de Windows 11 para macOS.
+// Renderiza las mismas plantillas Adaptive Card que usaría Edge en Windows.
+crearPanelWidgets({
+  boton: botonWidgets,
+  anunciar,
+  claveAlmacen: 'termia:widgets-instalados'
 });
 
 function sincronizarWco() {

@@ -1,0 +1,14 @@
+{
+  "valorOrigen": "20",
+  "unidadOrigen": "C",
+  "simboloOrigen": "°C",
+  "celsius": 20,
+  "fahrenheit": 68,
+  "kelvin": 293.15,
+  "rankine": 527.67,
+  "estado": "Templado",
+  "tono": "templado",
+  "actualizado": null,
+  "actualizadoTexto": "Valor de ejemplo",
+  "urlApp": "./"
+}

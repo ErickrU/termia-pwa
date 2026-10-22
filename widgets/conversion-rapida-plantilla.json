@@ -1,0 +1,48 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "TextBlock",
+      "text": "Conversión rápida",
+      "size": "Small",
+      "weight": "Bolder",
+      "isSubtle": true
+    },
+    {
+      "type": "TextBlock",
+      "text": "${celsius} °C",
+      "size": "ExtraLarge",
+      "weight": "Bolder",
+      "color": "${if(celsius < 15, 'Accent', 'Attention')}"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${estado}",
+      "size": "Medium",
+      "spacing": "None"
+    },
+    {
+      "type": "FactSet",
+      "facts": [
+        { "title": "Fahrenheit", "value": "${fahrenheit} °F" },
+        { "title": "Kelvin", "value": "${kelvin} K" },
+        { "title": "Rankine", "value": "${rankine} °R" }
+      ]
+    },
+    {
+      "type": "TextBlock",
+      "text": "Origen: ${valorOrigen} ${simboloOrigen} · ${actualizadoTexto}",
+      "size": "Small",
+      "isSubtle": true,
+      "wrap": true,
+      "spacing": "Medium"
+    }
+  ],
+  "actions": [
+    { "type": "Action.Execute", "title": "−1 °C", "verb": "bajar" },
+    { "type": "Action.Execute", "title": "+1 °C", "verb": "subir" },
+    { "type": "Action.OpenUrl", "title": "Abrir Termia", "url": "${urlApp}" }
+  ]
+}

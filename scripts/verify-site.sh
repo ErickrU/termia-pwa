@@ -59,11 +59,15 @@ check_asset 'css/offline.css' 'text/css'
 check_asset 'js/app.js' '(text|application)/javascript'
 check_asset 'js/conversion.js' '(text|application)/javascript'
 check_asset 'js/pwa.js' '(text|application)/javascript'
+check_asset 'js/widgets.js' '(text|application)/javascript'
 check_asset 'iconos/favicon.svg' 'image/svg\+xml'
 check_asset 'iconos/icono-192.png' 'image/png'
 check_asset 'iconos/icono-512.png' 'image/png'
 check_asset 'iconos/icono-maskable-512.png' 'image/png'
 check_asset 'iconos/apple-touch-icon.png' 'image/png'
+check_asset 'widgets/conversion-rapida-plantilla.json' 'application/json'
+check_asset 'widgets/conversion-rapida-datos.json' 'application/json'
+check_asset 'widgets/conversion-rapida-captura.png' 'image/png'
 
 node -e "JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'))" \
   "$TMP_DIR/manifest.webmanifest"
@@ -75,7 +79,7 @@ node --check "$TMP_DIR/sw.js" >/dev/null
 
 CONTROL_COUNT="$(grep -o 'data-control-ventana' "$TMP_DIR/index.html" | wc -l | tr -d ' ')"
 SHARE_COUNT="$(grep -o 'id="control-compartir"' "$TMP_DIR/index.html" | wc -l | tr -d ' ')"
-[[ "$CONTROL_COUNT" == '5' ]] || { printf 'ERROR: deben existir exactamente cinco controles WCO.\n' >&2; exit 1; }
+[[ "$CONTROL_COUNT" == '6' ]] || { printf 'ERROR: deben existir exactamente seis controles WCO.\n' >&2; exit 1; }
 [[ "$SHARE_COUNT" == '1' ]] || { printf 'ERROR: debe existir un único control Compartir.\n' >&2; exit 1; }
 grep -Eq 'id="dialogo-compartir"[^>]+aria-labelledby="titulo-compartir"[^>]+aria-describedby="descripcion-compartir"' "$TMP_DIR/index.html" || { printf 'ERROR: falta la hoja Compartir accesible.\n' >&2; exit 1; }
 grep -Eq 'id="estado-compartir"[^>]+role="status"[^>]+aria-live="polite"' "$TMP_DIR/index.html" || { printf 'ERROR: falta feedback accesible en Compartir.\n' >&2; exit 1; }
@@ -102,7 +106,7 @@ grep -Fq "botonCopiar.addEventListener('click', copiarEnlace)" "$TMP_DIR/js-pwa.
 grep -Fq 'navigator.clipboard?.writeText' "$TMP_DIR/js-pwa.js" || { printf 'ERROR: falta Clipboard API.\n' >&2; exit 1; }
 grep -Fq "document.execCommand('copy')" "$TMP_DIR/js-pwa.js" || { printf 'ERROR: falta el fallback de copia.\n' >&2; exit 1; }
 grep -Fq 'copiaManual.hidden = false' "$TMP_DIR/js-pwa.js" || { printf 'ERROR: falta el fallback de selección manual.\n' >&2; exit 1; }
-grep -Fq "const VERSION = 'termia-v3'" "$TMP_DIR/sw.js" || { printf 'ERROR: el shell no usa la versión de caché esperada.\n' >&2; exit 1; }
+grep -Fq "const VERSION = 'termia-v4'" "$TMP_DIR/sw.js" || { printf 'ERROR: el shell no usa la versión de caché esperada.\n' >&2; exit 1; }
 grep -Fq 'origin !== self.location.origin' "$TMP_DIR/sw.js" || { printf 'ERROR: el service worker no limita la caché al mismo origen.\n' >&2; exit 1; }
 ! grep -Eq 'https?://(wa\.me|t\.me|www\.facebook\.com|twitter\.com)' "$TMP_DIR/sw.js" || { printf 'ERROR: el service worker incluye contenido de terceros.\n' >&2; exit 1; }
 grep -Eq 'id="estado-pwa"[^>]+role="status"[^>]+aria-live="polite"' "$TMP_DIR/index.html" || { printf 'ERROR: falta feedback PWA accesible.\n' >&2; exit 1; }
@@ -111,5 +115,5 @@ node -e '
   if (JSON.stringify(manifest.display_override) !== JSON.stringify(["window-controls-overlay", "standalone"])) process.exit(1);
 ' "$TMP_DIR/manifest.webmanifest" || { printf 'ERROR: el manifest no conserva WCO.\n' >&2; exit 1; }
 
-printf '  ✓ HTTPS, cabeceras, PWA, cinco controles, hoja Compartir e iconos\n'
+printf '  ✓ HTTPS, cabeceras, PWA, seis controles, hoja Compartir, widgets e iconos\n'
 printf 'Sitio publicado correctamente.\n'

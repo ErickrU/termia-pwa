@@ -18,5 +18,31 @@
   ],
   "shortcuts": [
     { "name": "Conversión ambiente", "short_name": "20 °C", "url": "./?valor=20&unidad=C" }
+  ],
+  "widgets": [
+    {
+      "name": "Conversión rápida",
+      "short_name": "Conversión",
+      "description": "La última temperatura convertida en Celsius, Fahrenheit, Kelvin y Rankine, con su sensación térmica y botones de ±1 °C.",
+      "tag": "conversion-rapida",
+      "template": "conversion-rapida",
+      "ms_ac_template": "./widgets/conversion-rapida-plantilla.json",
+      "data": "./widgets/conversion-rapida-datos.json",
+      "type": "application/json",
+      "screenshots": [
+        {
+          "src": "./widgets/conversion-rapida-captura.png",
+          "sizes": "640x600",
+          "type": "image/png",
+          "platform": "windows",
+          "label": "Widget Conversión rápida en el panel de widgets"
+        }
+      ],
+      "icons": [
+        { "src": "./iconos/icono-192.png", "sizes": "192x192", "type": "image/png" }
+      ],
+      "auth": false,
+      "update": 3600
+    }
   ]
 }

@@ -23,19 +23,24 @@ const publicFiles = [
   'js/app.js',
   'js/conversion.js',
   'js/pwa.js',
+  'js/widgets.js',
   'iconos/favicon.svg',
   'iconos/icono-192.png',
   'iconos/icono-512.png',
   'iconos/icono-maskable-512.png',
-  'iconos/apple-touch-icon.png'
+  'iconos/apple-touch-icon.png',
+  'widgets/conversion-rapida-plantilla.json',
+  'widgets/conversion-rapida-datos.json',
+  'widgets/conversion-rapida-captura.png'
 ];
 
 function occurrences(text, pattern) {
   return [...text.matchAll(pattern)].length;
 }
 
-test('conserva cinco controles y añade una única hoja Compartir accesible', () => {
-  assert.equal(occurrences(html, /\bdata-control-ventana\b/g), 5);
+test('conserva seis controles y añade una única hoja Compartir accesible', () => {
+  assert.equal(occurrences(html, /\bdata-control-ventana\b/g), 6);
+  assert.match(html, /<button[^>]+id="control-widgets"[^>]+data-control-ventana[^>]+aria-label="Panel de widgets"/);
   assert.equal(occurrences(html, /\bid="control-compartir"/g), 1);
   assert.match(html, /<button[^>]+id="control-compartir"[^>]+data-control-ventana/);
 
@@ -111,14 +116,14 @@ test('mantiene accesibilidad, diálogos aislados y presentación adaptable', () 
 });
 
 test('actualiza el shell sin ampliar caché ni allowlists públicas', () => {
-  assert.match(worker, /const VERSION = 'termia-v3'/);
+  assert.match(worker, /const VERSION = 'termia-v4'/);
   const resourceBlock = worker.match(/const RECURSOS = \[([\s\S]*?)\];/)?.[1] || '';
   const resources = [...resourceBlock.matchAll(/'([^']+)'/g)].map((match) => match[1]);
   assert.deepEqual([...resources].sort(), publicFiles.map((file) => `./${file}`).sort());
   assert.match(worker, /new URL\(evento\.request\.url\)\.origin !== self\.location\.origin/);
   assert.doesNotMatch(worker, /https?:\/\/(?:wa\.me|t\.me|www\.facebook\.com|twitter\.com)/);
 
-  assert.match(pages, /find _site -type f \| wc -l[^\n]+"14"/);
+  assert.match(pages, /find _site -type f \| wc -l[^\n]+"18"/);
   for (const file of publicFiles) assert.ok(pages.includes(file), `Pages omite ${file}`);
   const deployBlock = deploy.match(/PUBLIC_FILES=\(([\s\S]*?)\n\)/)?.[1] || '';
   assert.deepEqual(deployBlock.trim().split(/\s+/), publicFiles);

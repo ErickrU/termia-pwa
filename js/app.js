@@ -1,9 +1,14 @@
 import {
   UNIDADES,
+  construirDatosWidget,
   convertirTemperatura,
   formatearTemperatura,
   obtenerEstadoTermico
 } from './conversion.js';
+import { alActualizarWidget, enviarDatosWidget } from './widgets.js';
+
+const CLAVE_ULTIMA_CONVERSION = 'termia:ultima-conversion';
+const TAG_WIDGET = 'conversion-rapida';
 
 const entrada = document.querySelector('#temperatura');
 const selector = document.querySelector('#unidad-origen');
@@ -13,6 +18,37 @@ const saturacion = document.querySelector('#saturacion');
 const nivel = document.querySelector('#nivel-termometro');
 const termometro = document.querySelector('.termometro');
 const equivalencias = document.querySelector('#equivalencias');
+
+// Última conversión persistida: alimenta el widget «Conversión rápida» y se
+// restaura en el formulario al cargar para que app y widget muestren lo mismo.
+function leerUltimaConversion() {
+  try {
+    const datos = JSON.parse(localStorage.getItem(CLAVE_ULTIMA_CONVERSION) ?? 'null');
+    if (datos && typeof datos.valorOrigen === 'string' && Object.hasOwn(UNIDADES, datos.unidadOrigen)) {
+      return datos;
+    }
+  } catch {
+    // JSON corrupto o almacenamiento no disponible.
+  }
+  return null;
+}
+
+function guardarUltimaConversion(datos) {
+  try {
+    localStorage.setItem(CLAVE_ULTIMA_CONVERSION, JSON.stringify(datos));
+  } catch {
+    // Modo privado o cuota agotada: la app sigue funcionando sin persistir.
+  }
+}
+
+// Marca temporal (ISO) de lo último publicado por esta página al service worker.
+let ultimaPublicacion = '';
+
+function publicarDatosWidget(datos) {
+  ultimaPublicacion = datos.actualizado;
+  guardarUltimaConversion(datos);
+  enviarDatosWidget(TAG_WIDGET, datos);
+}
 
 function renderizar() {
   const resultado = convertirTemperatura(entrada.value, selector.value);
@@ -55,6 +91,9 @@ function renderizar() {
   }
 
   termometro.setAttribute('aria-label', `Termómetro: ${formatearTemperatura(resultado.celsius)} grados Celsius. ${saturacion.textContent}`);
+
+  const datosWidget = construirDatosWidget(entrada.value, selector.value);
+  if (datosWidget) publicarDatosWidget(datosWidget);
 }
 
 function restablecer() {
@@ -74,5 +113,25 @@ document.querySelectorAll('[data-preset]').forEach((boton) => {
   });
 });
 window.addEventListener('termia:restablecer', restablecer);
+
+// Los «+1 °C» / «−1 °C» pulsados en el widget se persisten y se reflejan en el
+// formulario, así la app y el widget muestran siempre la misma temperatura.
+// Se ignoran los ecos y las difusiones anteriores a lo último publicado aquí
+// (p. ej. un valor intermedio mientras se escribe) para no pisar la entrada.
+alActualizarWidget(TAG_WIDGET, (datos) => {
+  if (typeof datos.actualizado !== 'string' || datos.actualizado < ultimaPublicacion) return;
+  guardarUltimaConversion(datos);
+  if (!Object.hasOwn(UNIDADES, datos.unidadOrigen) || typeof datos.valorOrigen !== 'string') return;
+  if (entrada.value.trim() === datos.valorOrigen && selector.value === datos.unidadOrigen) return;
+  entrada.value = datos.valorOrigen;
+  selector.value = datos.unidadOrigen;
+  renderizar();
+});
+
+const ultimaConversion = leerUltimaConversion();
+if (ultimaConversion) {
+  entrada.value = ultimaConversion.valorOrigen;
+  selector.value = ultimaConversion.unidadOrigen;
+}
 
 renderizar();

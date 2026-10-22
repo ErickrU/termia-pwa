@@ -97,3 +97,32 @@ export function obtenerEstadoTermico(celsius) {
   if (celsius < 40) return { categoria: 'Cálido', tono: 'calido' };
   return { categoria: 'Muy caliente', tono: 'muy-calido' };
 }
+
+/**
+ * Datos del widget «Conversión rápida» (mismo objeto que se persiste en
+ * localStorage y se publica al service worker). Devuelve null si la entrada
+ * no es una temperatura válida.
+ */
+export function construirDatosWidget(entrada, unidadOrigen, ahora = new Date()) {
+  const resultado = convertirTemperatura(entrada, unidadOrigen);
+  if (!resultado.valido) {
+    return null;
+  }
+
+  const redondear = (valor) => Math.round(valor * 100) / 100;
+  const estado = obtenerEstadoTermico(resultado.celsius);
+  return {
+    valorOrigen: String(entrada).trim(),
+    unidadOrigen,
+    simboloOrigen: UNIDADES[unidadOrigen].simbolo,
+    celsius: redondear(resultado.valores.C),
+    fahrenheit: redondear(resultado.valores.F),
+    kelvin: redondear(resultado.valores.K),
+    rankine: redondear(resultado.valores.R),
+    estado: estado.categoria,
+    tono: estado.tono,
+    actualizado: ahora.toISOString(),
+    actualizadoTexto: `Actualizado el ${ahora.toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' })}`,
+    urlApp: './'
+  };
+}

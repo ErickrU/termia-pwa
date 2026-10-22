@@ -116,11 +116,15 @@ PUBLIC_FILES=(
   js/app.js
   js/conversion.js
   js/pwa.js
+  js/widgets.js
   iconos/favicon.svg
   iconos/icono-192.png
   iconos/icono-512.png
   iconos/icono-maskable-512.png
   iconos/apple-touch-icon.png
+  widgets/conversion-rapida-plantilla.json
+  widgets/conversion-rapida-datos.json
+  widgets/conversion-rapida-captura.png
 )
 
 validate_local() {
@@ -146,7 +150,7 @@ validate_local() {
   local control_count share_count
   control_count="$(grep -o 'data-control-ventana' "$ROOT/index.html" | wc -l | tr -d ' ')"
   share_count="$(grep -o 'id="control-compartir"' "$ROOT/index.html" | wc -l | tr -d ' ')"
-  [[ "$control_count" == '5' ]] || fail 'La aplicación debe conservar exactamente cinco controles WCO.'
+  [[ "$control_count" == '6' ]] || fail 'La aplicación debe conservar exactamente seis controles WCO.'
   [[ "$share_count" == '1' ]] || fail 'La aplicación debe conservar exactamente un control Compartir.'
   ! grep -Eiq '<style([[:space:]>])|style=' "$ROOT/offline.html" || fail 'offline.html contiene CSS inline.'
   ! grep -Eiq 'unsafe-inline|unsafe-eval' "$TEMPLATE" || fail 'La plantilla contiene una excepción CSP insegura.'
