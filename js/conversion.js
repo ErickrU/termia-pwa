@@ -28,7 +28,7 @@ export function normalizarEntrada(entrada) {
 
 function aKelvin(valor, unidad) {
   switch (unidad) {
-    case 'C': return valor - 273.15;
+    case 'C': return valor + 273.15;
     case 'F': return (valor + 459.67) * 5 / 9;
     case 'K': return valor;
     case 'R': return valor * 5 / 9;
