@@ -29,3 +29,11 @@ jobs:
       # con la cobertura nativa de Node.js (V8) y deja coverage/lcov.info.
       - name: Ejecutar cobertura
         run: npm run coverage
+
+      # GitHub conserva el reporte (lcov.info + resumen.txt) como artefacto del run.
+      - name: Guardar reporte
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: error
