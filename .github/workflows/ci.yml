@@ -24,3 +24,8 @@ jobs:
 
       - name: Ejecutar pruebas
         run: npm test
+
+      # Equivale a `pytest --cov=. --cov-report=xml`: vuelve a correr las pruebas
+      # con la cobertura nativa de Node.js (V8) y deja coverage/lcov.info.
+      - name: Ejecutar cobertura
+        run: npm run coverage

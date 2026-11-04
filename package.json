@@ -11,6 +11,7 @@
     "start": "node herramientas/servidor.mjs",
     "check": "node --check js/conversion.js && node --check js/app.js && node --check js/pwa.js && node --check js/widgets.js && node --check sw.js && node --check herramientas/servidor.mjs && node --check herramientas/verificar-widgets.mjs && node --check scripts/aws-proof.mjs && node --check scripts/validate-aws-proof.mjs && node -e \"JSON.parse(require('node:fs').readFileSync('manifest.webmanifest', 'utf8'))\" && node -e \"JSON.parse(require('node:fs').readFileSync('widgets/conversion-rapida-plantilla.json', 'utf8')); JSON.parse(require('node:fs').readFileSync('widgets/conversion-rapida-datos.json', 'utf8'))\"",
     "test": "AWS_STACK_NAME=fixture-stack-not-for-deployment node --test",
+    "coverage": "mkdir -p coverage && AWS_STACK_NAME=fixture-stack-not-for-deployment node --test --experimental-test-coverage --test-coverage-exclude='tests/**' --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info",
     "iconos": "bash herramientas/generar-iconos.sh"
   },
   "keywords": ["pwa", "temperatura", "conversor", "service-worker", "window-controls-overlay"],

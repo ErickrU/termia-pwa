@@ -3,6 +3,7 @@ node_modules/
 npm-debug.log*
 *.log
 .coverage/
+coverage/
 _site/
 
 # Configuración local y secretos
