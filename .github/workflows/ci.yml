@@ -1,0 +1,26 @@
+# CI Pipeline: en cada push ejecuta las pruebas unitarias del proyecto.
+# Equivale al pipeline de la práctica (setup-python + pytest) adaptado al
+# stack real: Termia es JavaScript sin dependencias y usa el runner de
+# pruebas integrado en Node.js (`node --test`), por eso no hay paso de
+# instalación de dependencias.
+name: CI Pipeline
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Ejecutar pruebas
+        run: npm test
