@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import {
   convertirTemperatura,
   formatearTemperatura,
-  normalizarEntrada
+  normalizarEntrada,
+  obtenerEstadoTermico
 } from '../js/conversion.js';
 
 function cerca(actual, esperado, tolerancia = 1e-9) {
@@ -59,4 +60,44 @@ test('nunca entrega NaN, Infinity ni cero negativo', () => {
   }
   assert.equal(formatearTemperatura(Number.NaN), '');
   assert.equal(formatearTemperatura(Number.POSITIVE_INFINITY), '');
+});
+
+// Casos añadidos a partir del reporte de cobertura: ramas de conversion.js
+// que ninguna prueba ejercitaba (unidad desconocida, desborde a infinito,
+// formateo de valores finitos y categorías Cálido / Muy caliente).
+
+test('rechaza una unidad de origen desconocida', () => {
+  const resultado = convertirTemperatura('10', 'X');
+  assert.equal(resultado.valido, false);
+  assert.equal(resultado.error, 'Introduce una temperatura válida.');
+});
+
+test('rechaza magnitudes que desbordan a infinito, al normalizar o al convertir', () => {
+  assert.equal(normalizarEntrada('9'.repeat(400)), null);
+  const resultado = convertirTemperatura(`1${'0'.repeat(308)}`, 'K');
+  assert.equal(resultado.valido, false);
+  assert.equal(resultado.error, 'No se pudo calcular una temperatura finita.');
+});
+
+test('formatea valores finitos con hasta dos decimales, sin agrupación ni cero negativo', () => {
+  assert.equal(formatearTemperatura(98.6), '98.6');
+  assert.equal(formatearTemperatura(1234.5678), '1234.57');
+  assert.equal(formatearTemperatura(-40), '-40');
+  assert.equal(formatearTemperatura(273.15, 0), '273');
+  assert.equal(formatearTemperatura(-1e-12), '0');
+});
+
+test('clasifica el estado térmico en sus seis categorías y rechaza valores no finitos', () => {
+  assert.equal(obtenerEstadoTermico(Number.NaN), null);
+  const casos = [
+    [-273.15, 'Cero absoluto', 'extremo-frio'],
+    [-5, 'Bajo cero', 'frio'],
+    [10, 'Fresco', 'fresco'],
+    [22, 'Templado', 'templado'],
+    [30, 'Cálido', 'calido'],
+    [45, 'Muy caliente', 'muy-calido']
+  ];
+  for (const [celsius, categoria, tono] of casos) {
+    assert.deepEqual(obtenerEstadoTermico(celsius), { categoria, tono }, `${celsius} °C`);
+  }
 });
