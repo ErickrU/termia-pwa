@@ -1,5 +1,7 @@
 # Termia — Convertidor de temperatura
 
+[![CI Pipeline](https://github.com/ErickrU/termia-pwa/actions/workflows/ci.yml/badge.svg)](https://github.com/ErickrU/termia-pwa/actions/workflows/ci.yml)
+
 Termia es una PWA estática, accesible y sin dependencias de ejecución que convierte temperaturas entre Celsius, Fahrenheit, Kelvin y Rankine. Funciona sin conexión después de la primera carga completa.
 
 ## Funciones
