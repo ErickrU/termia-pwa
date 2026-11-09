@@ -1,7 +1,9 @@
-const VERSION = 'termia-v4';
+const VERSION = 'termia-v5';
 const CACHE_ESTATICO = `${VERSION}-estatico`;
 const CACHE_PAGINAS = `${VERSION}-paginas`;
 const CACHE_WIDGETS = 'termia-widgets-v1';
+// Marca del ultimo refresco en segundo plano; sobrevive a los cambios de VERSION.
+const CACHE_SINCRONIZACION = 'termia-sync-v1';
 const RECURSOS = [
   './index.html',
   './offline.html',
@@ -33,7 +35,7 @@ self.addEventListener('activate', (evento) => {
     caches.keys()
       .then((claves) => Promise.all(
         claves
-          .filter((clave) => clave.startsWith('termia-') && ![CACHE_ESTATICO, CACHE_PAGINAS, CACHE_WIDGETS].includes(clave))
+          .filter((clave) => clave.startsWith('termia-') && ![CACHE_ESTATICO, CACHE_PAGINAS, CACHE_WIDGETS, CACHE_SINCRONIZACION].includes(clave))
           .map((clave) => caches.delete(clave))
       ))
       .then(() => self.clients.claim())
@@ -54,6 +56,10 @@ self.addEventListener('message', (evento) => {
   if (!mensaje || typeof mensaje !== 'object') return;
   if (mensaje.tipo === 'ACTIVAR_ACTUALIZACION') {
     self.skipWaiting();
+    return;
+  }
+  if (mensaje.tipo === 'REFRESCAR') {
+    evento.waitUntil(refrescarPorPeticion(evento.source));
     return;
   }
   if (!esTagPropio(mensaje.tag)) return;
@@ -235,3 +241,127 @@ if ('widgets' in self) {
   self.addEventListener('widgetresume', (evento) => evento.waitUntil(renderWidget(evento.widget)));
   self.addEventListener('widgetclick', (evento) => evento.waitUntil(manejarAccionWidget(TAG_WIDGET, evento.action)));
 }
+
+/* ================================================================
+   SINCRONIZACION EN SEGUNDO PLANO
+   Sigue la guia de Microsoft Edge «Sincronización y actualización de una
+   PWA en segundo plano»: la sincronizacion periodica (periodicsync) refresca
+   el app shell y el widget para que esten frescos al abrir la app, y la
+   sincronizacion puntual (sync) actua como reintento diferido cuando un
+   refresco falla sin red. La pagina registra las etiquetas tras comprobar
+   `registration.periodicSync` / `registration.sync`; aqui solo se reacciona.
+   Background Fetch no aplica: Termia no descarga archivos grandes.
+   ================================================================ */
+const ETIQUETA_REFRESCO = 'termia-refresco';
+const ETIQUETA_REINTENTO = 'termia-reintento';
+const RUTA_ESTADO_SINCRONIZACION = './estado-sincronizacion.json';
+
+/** Guarda la marca del ultimo refresco como Response JSON (el SW no tiene localStorage). */
+async function guardarEstadoSincronizacion(estado) {
+  const cache = await caches.open(CACHE_SINCRONIZACION);
+  await cache.put(absoluta(RUTA_ESTADO_SINCRONIZACION), new Response(JSON.stringify(estado), {
+    headers: { 'Content-Type': 'application/json' }
+  }));
+}
+
+async function leerEstadoSincronizacion() {
+  try {
+    const cache = await caches.open(CACHE_SINCRONIZACION);
+    const respuesta = await cache.match(absoluta(RUTA_ESTADO_SINCRONIZACION));
+    return respuesta ? await respuesta.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Vuelve a descargar un recurso saltando la cache HTTP y sustituye la copia
+ * estatica solo si la respuesta es correcta: nunca se pisa una copia buena
+ * con un error. Devuelve true si el recurso quedo actualizado.
+ */
+async function refrescarRecurso(cache, ruta) {
+  const url = absoluta(ruta);
+  const respuesta = await fetch(url, { cache: 'reload' });
+  if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status} en ${ruta}`);
+  await cache.put(url, respuesta);
+  return true;
+}
+
+/** Pide al navegador que reintente cuando vuelva la red (patron «se intentara mas tarde»). */
+async function programarReintento() {
+  if (!('sync' in self.registration)) return false;
+  try {
+    await self.registration.sync.register(ETIQUETA_REINTENTO);
+    return true;
+  } catch (error) {
+    console.warn('[SW] No se pudo programar el reintento', error);
+    return false;
+  }
+}
+
+/**
+ * Trabajo comun de periodicsync, sync y la peticion manual de la pagina:
+ * refresca el app shell (incluidos widgets/*.json), vuelve a pintar el widget
+ * en el host de Windows y guarda la marca de tiempo del exito. Cada recurso
+ * falla por separado sin abortar el resto. Devuelve { ok, cuando, fallidos }.
+ */
+async function refrescarEnSegundoPlano({ origen = 'periodicsync', reintentar = true } = {}) {
+  const cache = await caches.open(CACHE_ESTATICO);
+  const resultados = await Promise.allSettled(RECURSOS.map((ruta) => refrescarRecurso(cache, ruta)));
+  const fallidos = RECURSOS.filter((ruta, indice) => resultados[indice].status === 'rejected');
+  const ok = fallidos.length === 0;
+
+  if (ok) {
+    const cuando = new Date().toISOString();
+    await guardarEstadoSincronizacion({ cuando, origen });
+    if ('widgets' in self) {
+      try {
+        await updateWidgets();
+      } catch (error) {
+        console.warn('[SW] widgets', error);
+      }
+    }
+    // No se llama a self.registration.update() aqui: en Chrome la primera
+    // llamada desde el SW tardaba mas de 20 s en resolverse y retrasaba la
+    // respuesta REFRESCADO. La nueva version del SW la detecta el navegador al
+    // navegar y la pagina la ofrece con su flujo explicito (updatefound).
+    return { ok, cuando, fallidos };
+  }
+
+  console.warn(`[SW] Refresco incompleto (${origen}): ${fallidos.length} de ${RECURSOS.length} recursos`);
+  if (reintentar) await programarReintento();
+  const anterior = await leerEstadoSincronizacion();
+  return { ok, cuando: anterior?.cuando ?? null, fallidos };
+}
+
+async function difundirRefresco(resultado, origen, destinos) {
+  const mensaje = { tipo: 'REFRESCADO', ok: resultado.ok, cuando: resultado.cuando, origen };
+  const clientes = destinos ?? await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  for (const cliente of clientes) cliente.postMessage(mensaje);
+}
+
+/** Peticion manual («Buscar actualizaciones»): responde solo a la pagina que la pidio. */
+async function refrescarPorPeticion(cliente) {
+  const resultado = await refrescarEnSegundoPlano({ origen: 'manual' });
+  if (cliente) await difundirRefresco(resultado, 'manual', [cliente]);
+}
+
+self.addEventListener('periodicsync', (evento) => {
+  if (evento.tag !== ETIQUETA_REFRESCO) return;
+  evento.waitUntil(
+    refrescarEnSegundoPlano({ origen: 'periodicsync' })
+      .then((resultado) => difundirRefresco(resultado, 'periodicsync'))
+  );
+});
+
+self.addEventListener('sync', (evento) => {
+  if (evento.tag !== ETIQUETA_REINTENTO) return;
+  // Sin reprogramar: si el refresco falla se rechaza la promesa y es el
+  // navegador quien reintenta con su propio retroceso hasta `lastChance`.
+  evento.waitUntil(
+    refrescarEnSegundoPlano({ origen: 'sync', reintentar: false }).then(async (resultado) => {
+      await difundirRefresco(resultado, 'sync');
+      if (!resultado.ok && !evento.lastChance) throw new Error('Refresco incompleto; se reintentara');
+    })
+  );
+});

@@ -24,14 +24,27 @@ const estadoCompartir = document.querySelector('#estado-compartir');
 const copiaManual = document.querySelector('#copia-manual');
 const enlaceCopiaManual = document.querySelector('#enlace-copia-manual');
 const estadoPwa = document.querySelector('#estado-pwa');
+const ultimaSincronizacion = document.querySelector('#ultima-sincronizacion');
+const botonBuscarActualizaciones = document.querySelector('#buscar-actualizaciones');
+const estadoSincronizacion = document.querySelector('#estado-sincronizacion');
 const TITULO_COMPARTIR = 'Termia — Convertidor de temperatura';
 const TEXTO_COMPARTIR = 'Convierte temperaturas con Termia.';
+// Sincronizacion en segundo plano (mismas etiquetas y cache que sw.js).
+const ETIQUETA_REFRESCO = 'termia-refresco';
+const ETIQUETA_REINTENTO = 'termia-reintento';
+const INTERVALO_MINIMO_REFRESCO = 24 * 60 * 60 * 1000;
+const CACHE_SINCRONIZACION = 'termia-sync-v1';
+const RUTA_ESTADO_SINCRONIZACION = './estado-sincronizacion.json';
+const PLAZO_SW_LISTO = 5000;
+const PLAZO_RESPUESTA_REFRESCO = 20_000;
 let solicitudInstalacion = null;
 let recargaAceptada = false;
 let focoAntesDeAyuda = null;
 let focoAntesDeCompartir = null;
 let temporizadorCierreCompartir = null;
 let temporizadorGeometria = null;
+let marcaUltimaSincronizacion = null;
+let resolverRefrescoPendiente = null;
 
 function estaInstalada() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -326,7 +339,196 @@ window.addEventListener('online', () => anunciar('Con conexión. El modo sin con
 window.addEventListener('offline', () => anunciar('Sin conexión: estás usando la copia guardada.'));
 actualizarInstalacion();
 
+/* ================================================================
+   SINCRONIZACION EN SEGUNDO PLANO (periodicsync + sync)
+   Deteccion de soporte tal como la describe la guia de Microsoft Edge:
+   `registration.periodicSync`, `registration.sync` y `navigator.permissions`.
+   En navegadores sin estas API todo se omite en silencio y la app se
+   comporta igual que antes.
+   ================================================================ */
+
+/**
+ * Texto relativo en español («hace 5 minutos», «ayer») para una marca ISO o
+ * milisegundos. Funcion pura: devuelve '' si la fecha no es valida.
+ */
+export function formatearTiempoRelativo(desde, ahora = Date.now()) {
+  if (desde === null || desde === undefined || desde === '' || typeof desde === 'boolean') return '';
+  const marca = desde instanceof Date ? desde.getTime() : new Date(desde).getTime();
+  if (!Number.isFinite(marca)) return '';
+  const transcurrido = Math.max(0, ahora - marca);
+  const segundos = Math.round(transcurrido / 1000);
+  if (segundos < 60) return 'hace un momento';
+  const formateador = new Intl.RelativeTimeFormat('es', { numeric: 'auto' });
+  const minutos = Math.round(segundos / 60);
+  if (minutos < 60) return formateador.format(-minutos, 'minute');
+  const horas = Math.round(minutos / 60);
+  if (horas < 24) return formateador.format(-horas, 'hour');
+  const dias = Math.round(horas / 24);
+  if (dias < 7) return formateador.format(-dias, 'day');
+  if (dias < 30) return formateador.format(-Math.round(dias / 7), 'week');
+  if (dias < 365) return formateador.format(-Math.round(dias / 30), 'month');
+  return formateador.format(-Math.round(dias / 365), 'year');
+}
+
+function anunciarSincronizacion(mensaje) {
+  estadoSincronizacion.textContent = mensaje;
+  anunciar(mensaje);
+}
+
+function pintarUltimaSincronizacion() {
+  const relativo = marcaUltimaSincronizacion ? formatearTiempoRelativo(marcaUltimaSincronizacion) : '';
+  if (!relativo) {
+    ultimaSincronizacion.hidden = true;
+    ultimaSincronizacion.textContent = '';
+    ultimaSincronizacion.removeAttribute('title');
+    return;
+  }
+  ultimaSincronizacion.textContent = `Última sincronización: ${relativo}`;
+  ultimaSincronizacion.title = new Date(marcaUltimaSincronizacion).toLocaleString('es-PE', { dateStyle: 'medium', timeStyle: 'short' });
+  ultimaSincronizacion.hidden = false;
+}
+
+function mostrarUltimaSincronizacion(cuando) {
+  if (typeof cuando !== 'string' || !Number.isFinite(new Date(cuando).getTime())) return;
+  marcaUltimaSincronizacion = cuando;
+  pintarUltimaSincronizacion();
+}
+
+/** Lee la marca que guarda el SW en Cache Storage (accesible tambien desde la pagina). */
+async function leerUltimaSincronizacion(registro) {
+  if (!('caches' in window)) return null;
+  try {
+    if (!(await caches.has(CACHE_SINCRONIZACION))) return null;
+    const cache = await caches.open(CACHE_SINCRONIZACION);
+    const respuesta = await cache.match(new URL(RUTA_ESTADO_SINCRONIZACION, registro.scope).href);
+    const estado = respuesta ? await respuesta.json() : null;
+    return typeof estado?.cuando === 'string' ? estado.cuando : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Registra el refresco diario solo si el navegador expone la API y ya
+ * concedio el permiso (lo otorga el propio navegador segun el uso de la app
+ * instalada; nunca se le pide nada a la persona usuaria).
+ */
+async function registrarSincronizacionPeriodica(registro) {
+  if (!registro.periodicSync) return 'no-soportada';
+  if (!navigator.permissions?.query) return 'sin-permiso';
+  let permiso;
+  try {
+    permiso = await navigator.permissions.query({ name: 'periodic-background-sync' });
+  } catch {
+    return 'sin-permiso';
+  }
+  if (permiso.state !== 'granted') return 'sin-permiso';
+  try {
+    await registro.periodicSync.register(ETIQUETA_REFRESCO, { minInterval: INTERVALO_MINIMO_REFRESCO });
+    return 'registrada';
+  } catch {
+    return 'rechazada';
+  }
+}
+
+/** Pide al SW un refresco inmediato y espera su respuesta REFRESCADO (o null si no llega). */
+function pedirRefresco(worker) {
+  return new Promise((resolver) => {
+    const temporizador = window.setTimeout(() => {
+      resolverRefrescoPendiente = null;
+      resolver(null);
+    }, PLAZO_RESPUESTA_REFRESCO);
+    resolverRefrescoPendiente = (respuesta) => {
+      window.clearTimeout(temporizador);
+      resolverRefrescoPendiente = null;
+      resolver(respuesta);
+    };
+    worker.postMessage({ tipo: 'REFRESCAR' });
+  });
+}
+
+/** Sin red: deja el reintento programado para cuando vuelva la conexion (patron «se intentará más tarde»). */
+async function programarReintentoDesdePagina(registro) {
+  if (!registro.sync) {
+    anunciarSincronizacion('Sin conexión: Termia se actualizará al abrirla con conexión.');
+    return;
+  }
+  try {
+    await registro.sync.register(ETIQUETA_REINTENTO);
+    anunciarSincronizacion('Sin conexión: Termia se actualizará automáticamente cuando vuelva la red.');
+  } catch {
+    anunciarSincronizacion('Sin conexión: Termia se actualizará al abrirla con conexión.');
+  }
+}
+
+/** `ready` nunca se resuelve si el registro fallo; se acota para no dejar el boton colgado. */
+function esperarRegistro() {
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise((resolver) => window.setTimeout(() => resolver(null), PLAZO_SW_LISTO))
+  ]);
+}
+
+async function buscarActualizaciones() {
+  if (!('serviceWorker' in navigator)) {
+    anunciarSincronizacion('Este navegador no admite actualizaciones en segundo plano.');
+    return;
+  }
+  botonBuscarActualizaciones.disabled = true;
+  anunciarSincronizacion('Buscando actualizaciones…');
+  try {
+    const registro = await esperarRegistro();
+    if (!registro) {
+      anunciarSincronizacion('No se pudo preparar la actualización. Recarga la página e inténtalo de nuevo.');
+      return;
+    }
+    if (!navigator.onLine) {
+      await programarReintentoDesdePagina(registro);
+      return;
+    }
+    const worker = navigator.serviceWorker.controller ?? registro.active;
+    if (!worker) {
+      anunciarSincronizacion('Recarga la página para activar las actualizaciones en segundo plano.');
+      return;
+    }
+    const respuesta = await pedirRefresco(worker);
+    if (respuesta?.ok) {
+      mostrarUltimaSincronizacion(respuesta.cuando);
+      anunciarSincronizacion(`Termia está al día (actualizado ${formatearTiempoRelativo(respuesta.cuando)}).`);
+    } else if (respuesta && registro.sync) {
+      anunciarSincronizacion('No se pudo actualizar ahora. Termia lo reintentará automáticamente.');
+    } else {
+      anunciarSincronizacion('No se pudo actualizar ahora. Inténtalo de nuevo más tarde.');
+    }
+  } finally {
+    botonBuscarActualizaciones.disabled = false;
+  }
+}
+
+/** Mensajes REFRESCADO del SW: respuesta a la peticion manual o aviso de un refresco en segundo plano. */
+function recibirRefresco(evento) {
+  const mensaje = evento.data;
+  if (!mensaje || typeof mensaje !== 'object' || mensaje.tipo !== 'REFRESCADO') return;
+  if (mensaje.origen === 'manual') {
+    resolverRefrescoPendiente?.(mensaje);
+    return;
+  }
+  if (mensaje.ok) {
+    mostrarUltimaSincronizacion(mensaje.cuando);
+    anunciar('Actualizado en segundo plano.');
+  }
+}
+
+botonBuscarActualizaciones.addEventListener('click', buscarActualizaciones);
+window.setInterval(pintarUltimaSincronizacion, 60_000);
+
 if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', recibirRefresco);
+  navigator.serviceWorker.ready.then(async (registro) => {
+    mostrarUltimaSincronizacion(await leerUltimaSincronizacion(registro));
+    document.body.dataset.sincronizacionPeriodica = await registrarSincronizacionPeriodica(registro);
+  });
+
   navigator.serviceWorker.register('./sw.js').then((registro) => {
     anunciar(navigator.onLine ? 'Lista para funcionar sin conexión.' : 'Sin conexión: estás usando la copia guardada.');
 

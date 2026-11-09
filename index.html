@@ -98,7 +98,10 @@
 
   <footer>
     <p><strong>Termia</strong> funciona sin conexión.</p>
-    <p id="estado-pwa" role="status" aria-live="polite">Preparando uso sin conexión…</p>
+    <div class="estado-app">
+      <p id="estado-pwa" role="status" aria-live="polite">Preparando uso sin conexión…</p>
+      <small id="ultima-sincronizacion" hidden></small>
+    </div>
   </footer>
 
   <dialog id="dialogo-ayuda" aria-labelledby="titulo-ayuda">
@@ -115,6 +118,12 @@
         <li><strong>Ayuda:</strong> abre esta guía; ciérrala con Escape.</li>
         <li><strong>Widgets:</strong> abre una simulación del panel de widgets de Windows 11 con tu última conversión y botones de ±1 °C.</li>
       </ul>
+      <section class="ayuda-sincronizacion" aria-labelledby="titulo-sincronizacion">
+        <h3 id="titulo-sincronizacion">Actualizaciones en segundo plano</h3>
+        <p id="descripcion-sincronizacion">Termia refresca su copia sin conexión y el widget en segundo plano en navegadores basados en Chromium (Microsoft Edge o Google Chrome) con la app instalada. En otros navegadores se actualiza al abrirla con conexión.</p>
+        <button type="button" id="buscar-actualizaciones" class="boton-sincronizacion" aria-describedby="descripcion-sincronizacion">Buscar actualizaciones</button>
+        <p id="estado-sincronizacion" class="estado-sincronizacion" role="status" aria-live="polite" aria-atomic="true"></p>
+      </section>
     </div>
   </dialog>
 

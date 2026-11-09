@@ -163,6 +163,8 @@ h2 { margin: 0; font-size: clamp(1.4rem, 2.4vw, 2rem); line-height: 1.15; }
 
 footer { display: flex; justify-content: space-between; gap: 1rem; width: min(1180px, calc(100% - 2rem)); margin: 0 auto; padding: 1.5rem 0 2.5rem; border-top: 1px solid var(--borde); color: var(--texto-suave); font-size: .82rem; }
 footer p { margin: 0; }
+.estado-app { display: grid; gap: .15rem; text-align: right; }
+.estado-app small { font-size: .74rem; }
 
 [hidden] { display: none !important; }
 
@@ -175,6 +177,14 @@ dialog { width: min(540px, calc(100% - 2rem)); max-height: calc(100vh - 2rem); m
 .cerrar-dialogo { position: absolute; top: .8rem; right: .8rem; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: var(--superficie-suave); color: var(--texto); font-size: 1.7rem; }
 .cerrar-dialogo:hover { background: color-mix(in srgb, var(--acento) 16%, var(--superficie)); color: var(--acento-fuerte); }
 .cerrar-dialogo svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-width: 2; }
+
+.ayuda-sincronizacion { margin-top: 1.5rem; padding-top: 1.2rem; border-top: 1px solid var(--borde); }
+.ayuda-sincronizacion h3 { margin: 0 0 .4rem; font-size: 1rem; }
+.ayuda-sincronizacion p { margin: 0 0 .9rem; font-size: .9rem; }
+.boton-sincronizacion { min-height: 44px; padding: .55rem 1.1rem; border: 1px solid var(--borde); border-radius: 13px; background: var(--fondo); color: var(--texto); font-size: .86rem; font-weight: 750; }
+.boton-sincronizacion:hover { border-color: var(--acento); background: var(--superficie-suave); color: var(--acento-fuerte); }
+.boton-sincronizacion:disabled { cursor: progress; opacity: .6; }
+.estado-sincronizacion { min-height: 1.5rem; margin: .8rem 0 0 !important; color: var(--acento-fuerte) !important; font-size: .86rem; font-weight: 750; }
 
 .dialogo-compartir {
   width: min(720px, calc(100% - 2rem));
@@ -269,6 +279,7 @@ dialog { width: min(540px, calc(100% - 2rem)); max-height: calc(100vh - 2rem); m
   .termometro { transform: scale(.84); transform-origin: center bottom; }
   .equivalencias article { padding: .7rem .75rem; }
   footer { width: calc(100% - 1rem); flex-direction: column; }
+  .estado-app { text-align: left; }
   .dialogo-compartir {
     inset: auto 0 0;
     width: 100%;

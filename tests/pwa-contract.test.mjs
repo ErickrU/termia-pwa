@@ -116,7 +116,7 @@ test('mantiene accesibilidad, diálogos aislados y presentación adaptable', () 
 });
 
 test('actualiza el shell sin ampliar caché ni allowlists públicas', () => {
-  assert.match(worker, /const VERSION = 'termia-v4'/);
+  assert.match(worker, /const VERSION = 'termia-v5'/);
   const resourceBlock = worker.match(/const RECURSOS = \[([\s\S]*?)\];/)?.[1] || '';
   const resources = [...resourceBlock.matchAll(/'([^']+)'/g)].map((match) => match[1]);
   assert.deepEqual([...resources].sort(), publicFiles.map((file) => `./${file}`).sort());

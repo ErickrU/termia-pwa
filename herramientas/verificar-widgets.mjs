@@ -37,6 +37,9 @@ const PUERTO_CDP = Number(flag('cdp', 9413));
 const TAG = 'conversion-rapida';
 const CLAVE_INSTALADOS = 'termia:widgets-instalados';
 const CLAVE_CONVERSION = 'termia:ultima-conversion';
+// La versión del SW se lee de sw.js para no desincronizar la prueba al subirla.
+const VERSION_SW = readFileSync(join(RAIZ, 'sw.js'), 'utf8').match(/const VERSION = '([^']+)'/)?.[1] ?? 'termia';
+const CACHE_ESTATICO = `${VERSION_SW}-estatico`;
 
 const espera = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
 
@@ -530,12 +533,12 @@ try {
   const sw = await cdp.evaluar(`(async () => {
     await navigator.serviceWorker.ready;
     const nombres = await caches.keys();
-    const estatico = nombres.find(n => n === 'termia-v4-estatico');
+    const estatico = nombres.find(n => n === ${JSON.stringify(CACHE_ESTATICO)});
     const claves = estatico ? (await (await caches.open(estatico)).keys()).map(k => new URL(k.url).pathname) : [];
     return { nombres, claves, cuantos: claves.length };
   })()`);
-  comprobar('El service worker termia-v4 precachea el widget y el módulo del simulador',
-    sw.nombres.includes('termia-v4-estatico')
+  comprobar(`El service worker ${VERSION_SW} precachea el widget y el módulo del simulador`,
+    sw.nombres.includes(CACHE_ESTATICO)
       && ['/widgets/conversion-rapida-plantilla.json', '/widgets/conversion-rapida-datos.json', '/widgets/conversion-rapida-captura.png', '/js/widgets.js']
         .every(ruta => sw.claves.some(c => c.endsWith(ruta))),
     `${sw.cuantos} recursos · caches: ${sw.nombres.join(', ')}`);
