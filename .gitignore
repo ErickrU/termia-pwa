@@ -31,3 +31,6 @@ infra/packaged*.yaml
 
 # Metadatos de agentes locales
 .agents/
+# Salidas del pipeline (build y reporte)
+dist/
+reporte-ci.md
