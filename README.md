@@ -41,6 +41,8 @@ npm start
 
 El servidor de desarrollo escucha exclusivamente en `127.0.0.1:4173`.
 
+## Integración continua
+Cada push ejecuta el workflow [CI Pipeline](.github/workflows/ci.yml) en GitHub Actions con cinco etapas encadenadas: **Build** (`npm run build` genera `dist/` con los 18 archivos publicables y `BUILD-INFO.json`), **Análisis estático** (`npm run check`), **Pruebas** (`npm test` y `npm run coverage`), **Reporte** (`npm run reporte` publica las métricas en el resumen del run) y **Aprobación**. Cada ejecución conserva los artefactos `build`, `coverage-report` y `reporte-ci`.
 ## Publicación
 
 GitHub Pages construye un artefacto `_site` con una allowlist explícita de 18 archivos públicos; no publica la raíz del repositorio. Todas las rutas de la aplicación son relativas.

@@ -1,39 +1,116 @@
-# CI Pipeline: en cada push ejecuta las pruebas unitarias del proyecto.
-# Equivale al pipeline de la práctica (setup-python + pytest) adaptado al
-# stack real: Termia es JavaScript sin dependencias y usa el runner de
-# pruebas integrado en Node.js (`node --test`), por eso no hay paso de
-# instalación de dependencias.
+# CI Pipeline integrado: en cada push ejecuta, en este orden y en un único flujo,
+#   Push → Build → Análisis estático → Pruebas → Reporte → Aprobación
+# Cada etapa es un job que depende del anterior (`needs`), así que una falla
+# detiene el flujo en el punto exacto donde ocurre (fail fast) y la aprobación
+# final solo se alcanza cuando todas las etapas terminaron en verde.
 name: CI Pipeline
-
 on:
   push:
-
 permissions:
   contents: read
-
 jobs:
-  test:
+  # 1) Build: genera dist/ con los 18 archivos publicables + BUILD-INFO.json
+  #    (versión, commit y número de ejecución) y lo guarda como artefacto.
+  build:
+    name: Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Instalar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Construir distribuible
+        run: npm run build
+      - name: Guardar artefacto del build
+        uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: dist/
+          if-no-files-found: error
 
+  # 2) Análisis estático: sintaxis de todos los archivos JavaScript (node --check)
+  #    y validez del manifest y de las plantillas JSON, sin ejecutar la aplicación.
+  analisis-estatico:
+    name: Análisis estático
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Analizar sintaxis y manifiestos
+        run: npm run check
+
+  # 3) Pruebas: las pruebas unitarias (node --test) y la cobertura nativa de V8;
+  #    el reporte de cobertura (lcov.info + resumen.txt) se conserva como artefacto.
+  pruebas:
+    name: Pruebas
+    needs: analisis-estatico
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - name: Ejecutar pruebas
         run: npm test
-
-      # Equivale a `pytest --cov=. --cov-report=xml`: vuelve a correr las pruebas
-      # con la cobertura nativa de Node.js (V8) y deja coverage/lcov.info.
       - name: Ejecutar cobertura
         run: npm run coverage
-
-      # GitHub conserva el reporte (lcov.info + resumen.txt) como artefacto del run.
-      - name: Guardar reporte
+      - name: Guardar reporte de cobertura
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage/
           if-no-files-found: error
+
+  # 4) Reporte: reúne las métricas del build y de las pruebas en reporte-ci.md,
+  #    lo publica en el resumen del run y lo guarda como artefacto.
+  reporte:
+    name: Reporte
+    needs: pruebas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Descargar artefacto del build
+        uses: actions/download-artifact@v4
+        with:
+          name: build
+          path: dist/
+      - name: Descargar reporte de cobertura
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+      - name: Generar reporte de ejecución
+        run: npm run reporte
+      - name: Guardar reporte
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-ci
+          path: reporte-ci.md
+          if-no-files-found: error
+
+  # 5) Aprobación: solo se ejecuta si las cuatro etapas anteriores terminaron en
+  #    verde; deja constancia de que el commit queda aprobado para integrarse.
+  aprobacion:
+    name: Aprobación
+    needs: reporte
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aprobar el commit
+        run: |
+          {
+            echo "## ✅ Aprobación"
+            echo ""
+            echo "Las etapas Build, Análisis estático, Pruebas y Reporte terminaron en verde."
+            echo "El commit \`${GITHUB_SHA::7}\` (${GITHUB_REF_NAME}) queda aprobado para integrarse y publicarse."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit ${GITHUB_SHA::7} aprobado: build, análisis estático, pruebas y reporte en verde."
